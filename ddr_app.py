@@ -56,94 +56,92 @@ st.markdown("""
     @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
     html, body, [class*="css"] { font-family: 'Inter', sans-serif; }
 
-    /* ── Background ── */
-    .stApp { background-color: #f4f8f5; }
+    /* ── Force dark text everywhere on light backgrounds ── */
+    .stApp { background-color: #f4f8f5; color: #1a1a1a; }
+    .stApp p, .stApp label, .stApp span, .stApp div { color: #1a1a1a; }
+    .stMarkdown p { color: #1a1a1a !important; }
+    .stCaption, .stCaption p { color: #555555 !important; }
+
+    /* ── Block container ── */
     .block-container { padding-top: 2rem; max-width: 780px; }
 
-    /* ── Hero banner ── */
+    /* ── Hero banner (white text on dark green — intentional) ── */
     .hero {
         background: linear-gradient(135deg, #1a472a 0%, #2d5f3f 60%, #3a7d52 100%);
         border-radius: 14px;
         padding: 2.5rem 2rem 2rem 2rem;
         margin-bottom: 1.8rem;
-        color: white;
         text-align: center;
         box-shadow: 0 4px 20px rgba(45, 95, 63, 0.3);
     }
-    .hero-logo {
-        font-size: 2.8rem;
-        margin-bottom: 0.3rem;
-    }
+    .hero * { color: white !important; }
+    .hero-logo { font-size: 2.8rem; margin-bottom: 0.3rem; }
     .hero-brand {
         font-size: 0.85rem;
         font-weight: 600;
         letter-spacing: 0.18em;
         text-transform: uppercase;
-        color: #a8d5b5;
+        color: #a8d5b5 !important;
         margin-bottom: 0.5rem;
     }
     .hero-title {
         font-size: 2rem;
         font-weight: 700;
-        color: white;
+        color: white !important;
         margin: 0 0 0.6rem 0;
         line-height: 1.2;
     }
     .hero-sub {
         font-size: 0.97rem;
-        color: #c8e6d2;
+        color: #c8e6d2 !important;
         max-width: 520px;
         margin: 0 auto;
         line-height: 1.6;
     }
 
-    /* ── Section card ── */
-    .card {
-        background: white;
-        border-radius: 10px;
-        padding: 1.5rem 1.8rem;
-        margin-bottom: 1.2rem;
-        border: 1px solid #d8ead e;
-        box-shadow: 0 2px 8px rgba(0,0,0,0.05);
-    }
-    .card-label {
+    /* ── Upload label ── */
+    .upload-label {
         font-size: 0.75rem;
         font-weight: 700;
         letter-spacing: 0.12em;
         text-transform: uppercase;
-        color: #2d5f3f;
+        color: #2d5f3f !important;
         margin-bottom: 0.5rem;
     }
 
-    /* ── Upload area ── */
+    /* ── Upload area — force dark text inside ── */
     [data-testid="stFileUploader"] {
         border: 2px dashed #5a9e72 !important;
         border-radius: 10px !important;
         background: #f9fcfa !important;
         padding: 0.5rem !important;
     }
+    [data-testid="stFileUploader"] * { color: #1a1a1a !important; }
+    [data-testid="stFileUploader"] small { color: #555555 !important; }
+    [data-testid="stFileUploaderDropzoneInstructions"] { color: #1a1a1a !important; }
+    [data-testid="stFileUploaderDropzoneInstructions"] * { color: #333333 !important; }
 
     /* ── Buttons ── */
     .stButton > button {
-        background: linear-gradient(135deg, #2d5f3f, #3a7d52);
-        color: white;
-        font-weight: 600;
-        border: none;
-        padding: 0.7rem 2.2rem;
-        border-radius: 8px;
-        font-size: 1rem;
-        letter-spacing: 0.02em;
-        transition: all 0.2s;
-        box-shadow: 0 2px 8px rgba(45, 95, 63, 0.3);
-        width: 100%;
+        background: linear-gradient(135deg, #2d5f3f, #3a7d52) !important;
+        color: white !important;
+        font-weight: 600 !important;
+        border: none !important;
+        padding: 0.7rem 2.2rem !important;
+        border-radius: 8px !important;
+        font-size: 1rem !important;
+        transition: all 0.2s !important;
+        box-shadow: 0 2px 8px rgba(45, 95, 63, 0.3) !important;
+        width: 100% !important;
     }
     .stButton > button:hover {
-        background: linear-gradient(135deg, #1a472a, #2d5f3f);
-        box-shadow: 0 4px 14px rgba(45, 95, 63, 0.45);
-        transform: translateY(-1px);
+        background: linear-gradient(135deg, #1a472a, #2d5f3f) !important;
+        box-shadow: 0 4px 14px rgba(45, 95, 63, 0.45) !important;
+        transform: translateY(-1px) !important;
     }
     .stButton > button:disabled {
         background: #b0c8b8 !important;
+        color: #ffffff !important;
         box-shadow: none !important;
         transform: none !important;
     }
@@ -165,7 +163,7 @@ st.markdown("""
         transform: translateY(-1px) !important;
     }
 
-    /* ── Status box ── */
+    /* ── File info box ── */
     .file-info {
         background: #eef7f1;
         border-left: 4px solid #2d5f3f;
@@ -173,26 +171,26 @@ st.markdown("""
         border-radius: 6px;
         margin: 0.6rem 0;
         font-size: 0.93rem;
-        color: #1a3d28;
+        color: #1a3d28 !important;
     }
 
+    /* ── Status steps ── */
+    [data-testid="stStatusWidget"] { color: #1a1a1a !important; }
+    [data-testid="stStatusWidget"] * { color: #1a1a1a !important; }
+
     /* ── Success box ── */
-    .stSuccess {
-        background: #eef7f1 !important;
-        border: 1px solid #5a9e72 !important;
-        border-radius: 8px !important;
-    }
+    [data-testid="stAlert"] { border-radius: 8px !important; }
+    [data-testid="stAlert"] p { color: #1a1a1a !important; }
 
     /* ── Footer ── */
     .footer {
         text-align: center;
         font-size: 0.78rem;
-        color: #7a9e8a;
+        color: #4a7a5a !important;
         padding: 1.5rem 0 0.5rem 0;
-        border-top: 1px solid #d0e6d8;
+        border-top: 1px solid #c0d8c8;
         margin-top: 2rem;
     }
-    .footer a { color: #2d5f3f; text-decoration: none; }
 
     /* ── Step pills ── */
     .step-row {
@@ -203,9 +201,9 @@ st.markdown("""
         flex-wrap: wrap;
     }
     .step-pill {
-        background: rgba(255,255,255,0.15);
-        border: 1px solid rgba(255,255,255,0.3);
-        color: white;
+        background: rgba(255,255,255,0.18);
+        border: 1px solid rgba(255,255,255,0.35);
+        color: white !important;
         border-radius: 20px;
         padding: 0.25rem 0.85rem;
         font-size: 0.78rem;
@@ -234,7 +232,7 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 # ── File uploader ─────────────────────────────────────────────────────────────
-st.markdown('<div class="card-label">📂 Upload Pitch Deck</div>', unsafe_allow_html=True)
+st.markdown('<div class="upload-label">📂 Upload Pitch Deck</div>', unsafe_allow_html=True)
 uploaded_file = st.file_uploader(
     "Drop a PDF here or click to browse",
     type=["pdf"],
@@ -359,5 +357,7 @@ st.markdown("""
     Due Diligence Report Generator &nbsp;·&nbsp;
     Powered by Claude AI &nbsp;·&nbsp;
     No investment recommendation is made by this tool.
+    <br style="margin-bottom:0.3rem;">
+    Built by <strong>Jack Zawadzki</strong>
 </div>
 """, unsafe_allow_html=True)
