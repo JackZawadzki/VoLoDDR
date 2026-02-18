@@ -1,6 +1,6 @@
 """
-DDR Streamlit App
-=================
+VoLo Earth Ventures — Due Diligence Report Generator
+=====================================================
 Web interface for the Due Diligence Report Generator.
 
 Installation:
@@ -29,14 +29,13 @@ from datetime import datetime
 import streamlit as st
 
 # ── Load the analyzer from the existing DDR file ─────────────────────────────
-# This imports DueDiligenceAnalyzer without running main()
 _ddr_path = Path(__file__).parent / "DDR(draft 11).py"
 _spec = importlib.util.spec_from_file_location("ddr_module", _ddr_path)
 _mod = importlib.util.module_from_spec(_spec)
 _spec.loader.exec_module(_mod)
 DueDiligenceAnalyzer = _mod.DueDiligenceAnalyzer
 
-# ── API key: try Streamlit secrets first, then environment ───────────────────
+# ── API key ───────────────────────────────────────────────────────────────────
 def get_api_key() -> str:
     try:
         return st.secrets["ANTHROPIC_API_KEY"]
@@ -45,81 +44,223 @@ def get_api_key() -> str:
 
 # ── Page config ───────────────────────────────────────────────────────────────
 st.set_page_config(
-    page_title="Due Diligence Report Generator",
-    page_icon="🔬",
+    page_title="VoLo Earth Ventures · DDR",
+    page_icon="🌿",
     layout="centered",
 )
 
 # ── Styling ───────────────────────────────────────────────────────────────────
 st.markdown("""
 <style>
-    .main { max-width: 760px; }
+    /* ── Fonts & base ── */
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
+    html, body, [class*="css"] { font-family: 'Inter', sans-serif; }
+
+    /* ── Background ── */
+    .stApp { background-color: #f4f8f5; }
+    .block-container { padding-top: 2rem; max-width: 780px; }
+
+    /* ── Hero banner ── */
+    .hero {
+        background: linear-gradient(135deg, #1a472a 0%, #2d5f3f 60%, #3a7d52 100%);
+        border-radius: 14px;
+        padding: 2.5rem 2rem 2rem 2rem;
+        margin-bottom: 1.8rem;
+        color: white;
+        text-align: center;
+        box-shadow: 0 4px 20px rgba(45, 95, 63, 0.3);
+    }
+    .hero-logo {
+        font-size: 2.8rem;
+        margin-bottom: 0.3rem;
+    }
+    .hero-brand {
+        font-size: 0.85rem;
+        font-weight: 600;
+        letter-spacing: 0.18em;
+        text-transform: uppercase;
+        color: #a8d5b5;
+        margin-bottom: 0.5rem;
+    }
+    .hero-title {
+        font-size: 2rem;
+        font-weight: 700;
+        color: white;
+        margin: 0 0 0.6rem 0;
+        line-height: 1.2;
+    }
+    .hero-sub {
+        font-size: 0.97rem;
+        color: #c8e6d2;
+        max-width: 520px;
+        margin: 0 auto;
+        line-height: 1.6;
+    }
+
+    /* ── Section card ── */
+    .card {
+        background: white;
+        border-radius: 10px;
+        padding: 1.5rem 1.8rem;
+        margin-bottom: 1.2rem;
+        border: 1px solid #d8ead e;
+        box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+    }
+    .card-label {
+        font-size: 0.75rem;
+        font-weight: 700;
+        letter-spacing: 0.12em;
+        text-transform: uppercase;
+        color: #2d5f3f;
+        margin-bottom: 0.5rem;
+    }
+
+    /* ── Upload area ── */
+    [data-testid="stFileUploader"] {
+        border: 2px dashed #5a9e72 !important;
+        border-radius: 10px !important;
+        background: #f9fcfa !important;
+        padding: 0.5rem !important;
+    }
+
+    /* ── Buttons ── */
     .stButton > button {
-        background-color: #2d5f3f;
+        background: linear-gradient(135deg, #2d5f3f, #3a7d52);
         color: white;
         font-weight: 600;
         border: none;
-        padding: 0.6rem 2rem;
-        border-radius: 6px;
+        padding: 0.7rem 2.2rem;
+        border-radius: 8px;
         font-size: 1rem;
+        letter-spacing: 0.02em;
+        transition: all 0.2s;
+        box-shadow: 0 2px 8px rgba(45, 95, 63, 0.3);
+        width: 100%;
     }
-    .stButton > button:hover { background-color: #1a472a; }
-    .status-box {
-        background: #f0f7f2;
+    .stButton > button:hover {
+        background: linear-gradient(135deg, #1a472a, #2d5f3f);
+        box-shadow: 0 4px 14px rgba(45, 95, 63, 0.45);
+        transform: translateY(-1px);
+    }
+    .stButton > button:disabled {
+        background: #b0c8b8 !important;
+        box-shadow: none !important;
+        transform: none !important;
+    }
+
+    /* ── Download button ── */
+    [data-testid="stDownloadButton"] > button {
+        background: linear-gradient(135deg, #1a472a, #2d5f3f) !important;
+        color: white !important;
+        font-weight: 700 !important;
+        font-size: 1.05rem !important;
+        padding: 0.85rem !important;
+        border-radius: 10px !important;
+        box-shadow: 0 4px 16px rgba(45, 95, 63, 0.4) !important;
+        border: none !important;
+        width: 100% !important;
+    }
+    [data-testid="stDownloadButton"] > button:hover {
+        background: linear-gradient(135deg, #0f2d1a, #1a472a) !important;
+        transform: translateY(-1px) !important;
+    }
+
+    /* ── Status box ── */
+    .file-info {
+        background: #eef7f1;
         border-left: 4px solid #2d5f3f;
-        padding: 1rem 1.2rem;
-        border-radius: 4px;
-        margin: 0.5rem 0;
-        font-size: 0.95rem;
+        padding: 0.75rem 1.1rem;
+        border-radius: 6px;
+        margin: 0.6rem 0;
+        font-size: 0.93rem;
+        color: #1a3d28;
     }
-    .warn-box {
-        background: #fff8e1;
-        border-left: 4px solid #f59e0b;
-        padding: 0.8rem 1.2rem;
-        border-radius: 4px;
-        margin: 0.5rem 0;
-        font-size: 0.9rem;
+
+    /* ── Success box ── */
+    .stSuccess {
+        background: #eef7f1 !important;
+        border: 1px solid #5a9e72 !important;
+        border-radius: 8px !important;
     }
-    h1 { color: #2d5f3f; }
-    h2 { color: #2d5f3f; }
+
+    /* ── Footer ── */
+    .footer {
+        text-align: center;
+        font-size: 0.78rem;
+        color: #7a9e8a;
+        padding: 1.5rem 0 0.5rem 0;
+        border-top: 1px solid #d0e6d8;
+        margin-top: 2rem;
+    }
+    .footer a { color: #2d5f3f; text-decoration: none; }
+
+    /* ── Step pills ── */
+    .step-row {
+        display: flex;
+        gap: 0.5rem;
+        justify-content: center;
+        margin: 1rem 0 0.5rem 0;
+        flex-wrap: wrap;
+    }
+    .step-pill {
+        background: rgba(255,255,255,0.15);
+        border: 1px solid rgba(255,255,255,0.3);
+        color: white;
+        border-radius: 20px;
+        padding: 0.25rem 0.85rem;
+        font-size: 0.78rem;
+        font-weight: 500;
+    }
 </style>
 """, unsafe_allow_html=True)
 
-# ── Header ────────────────────────────────────────────────────────────────────
-st.title("🔬 Due Diligence Report Generator")
-st.markdown(
-    "Upload a pitch deck PDF to generate an IC-ready due diligence report. "
-    "The report surfaces unverified claims, maps the competitive landscape, "
-    "and sizes the potential outcome if each claim is proven true."
-)
-st.divider()
+# ── Hero Banner ───────────────────────────────────────────────────────────────
+st.markdown("""
+<div class="hero">
+    <div class="hero-logo">🌿</div>
+    <div class="hero-brand">VoLo Earth Ventures</div>
+    <div class="hero-title">Due Diligence Report Generator</div>
+    <div class="hero-sub">
+        Upload a pitch deck and receive an IC-ready report surfacing unverified claims,
+        competitive landscape, and outcome magnitude — powered by Claude AI.
+    </div>
+    <div class="step-row">
+        <span class="step-pill">📄 Extract</span>
+        <span class="step-pill">🔬 Analyze</span>
+        <span class="step-pill">📊 Score</span>
+        <span class="step-pill">📑 Generate PDF</span>
+    </div>
+</div>
+""", unsafe_allow_html=True)
 
 # ── File uploader ─────────────────────────────────────────────────────────────
+st.markdown('<div class="card-label">📂 Upload Pitch Deck</div>', unsafe_allow_html=True)
 uploaded_file = st.file_uploader(
-    "Drop a pitch deck PDF here",
+    "Drop a PDF here or click to browse",
     type=["pdf"],
     help="Maximum recommended size: 50MB. Large decks will be analysed on the first ~60,000 characters.",
+    label_visibility="collapsed",
 )
 
 if uploaded_file:
     file_size_mb = uploaded_file.size / (1024 * 1024)
     st.markdown(
-        f'<div class="status-box">📄 <b>{uploaded_file.name}</b> — {file_size_mb:.1f} MB uploaded</div>',
+        f'<div class="file-info">📄 <b>{uploaded_file.name}</b> &nbsp;·&nbsp; {file_size_mb:.1f} MB</div>',
         unsafe_allow_html=True,
     )
-
     if file_size_mb > 50:
         st.warning("This file is very large. Consider compressing the PDF before uploading.")
 
-st.divider()
+st.write("")
 
 # ── Run button ────────────────────────────────────────────────────────────────
-col1, col2 = st.columns([2, 1])
-with col1:
-    run_button = st.button("▶ Run Analysis", disabled=uploaded_file is None)
-with col2:
-    if uploaded_file is None:
-        st.caption("Upload a PDF to begin")
+run_button = st.button(
+    "▶ &nbsp; Run Due Diligence Analysis",
+    disabled=uploaded_file is None,
+    use_container_width=True,
+)
+if uploaded_file is None:
+    st.caption("⬆️ Upload a pitch deck PDF to begin")
 
 # ── Analysis ──────────────────────────────────────────────────────────────────
 if run_button and uploaded_file:
@@ -127,7 +268,7 @@ if run_button and uploaded_file:
     if not api_key:
         st.error(
             "No API key found. Set **ANTHROPIC_API_KEY** as an environment variable "
-            "or add it to `.streamlit/secrets.toml`."
+            "or add it to the Streamlit Secrets settings."
         )
         st.stop()
 
@@ -137,7 +278,6 @@ if run_button and uploaded_file:
         st.error(str(e))
         st.stop()
 
-    # Save uploaded file to a temp location for pypdf
     with tempfile.NamedTemporaryFile(delete=False, suffix=".pdf") as tmp:
         tmp.write(uploaded_file.getbuffer())
         tmp_path = tmp.name
@@ -167,7 +307,7 @@ if run_button and uploaded_file:
             high = sum(1 for c in unverified if c.get("priority") == "HIGH")
 
             st.write(f"✓ Analysis complete — {company_name}")
-            st.write(f"✓ {len(unverified)} unverified claims found ({critical} critical, {high} high priority)")
+            st.write(f"✓ {len(unverified)} unverified claims ({critical} critical, {high} high priority)")
             status.update(label="🔬 Analysis complete", state="complete")
 
         # ── Step 3: Score ─────────────────────────────────────────────────────
@@ -181,9 +321,8 @@ if run_button and uploaded_file:
             safe_name = company_name.replace(" ", "_").replace("/", "-")
             output_filename = f"{safe_name}_DDR_{timestamp}.pdf"
             output_path = os.path.join(tempfile.gettempdir(), output_filename)
-
             analyzer.generate_pdf(scored, output_path)
-            status.update(label="📑 PDF generated", state="complete")
+            status.update(label="📑 PDF report generated", state="complete")
 
     except FileNotFoundError as e:
         st.error(f"File error: {e}")
@@ -194,14 +333,14 @@ if run_button and uploaded_file:
     finally:
         os.unlink(tmp_path)
 
-    # ── Download button ───────────────────────────────────────────────────────
-    st.divider()
-    st.success("✅ Report complete!")
+    # ── Download ──────────────────────────────────────────────────────────────
+    st.write("")
+    st.success(f"✅ Due diligence report ready — {company_name}")
     with open(output_path, "rb") as f:
         pdf_bytes = f.read()
 
     st.download_button(
-        label="⬇️ Download Full PDF Report",
+        label="⬇️  Download Due Diligence Report (PDF)",
         data=pdf_bytes,
         file_name=output_filename,
         mime="application/pdf",
@@ -209,14 +348,16 @@ if run_button and uploaded_file:
     )
 
     st.caption(
-        f"Report generated {datetime.now().strftime('%B %d, %Y at %H:%M')} · "
-        f"{analysis.get('sources_consulted', '?')} sources consulted · "
-        "No investment recommendation is made."
+        f"Generated {datetime.now().strftime('%B %d, %Y at %H:%M')} · "
+        "No investment recommendation is made by this tool."
     )
 
 # ── Footer ────────────────────────────────────────────────────────────────────
-st.divider()
-st.caption(
-    "Due Diligence Report Generator · Powered by Claude · "
-    "No investment recommendation is made by this tool."
-)
+st.markdown("""
+<div class="footer">
+    🌿 <strong>VoLo Earth Ventures</strong> &nbsp;·&nbsp;
+    Due Diligence Report Generator &nbsp;·&nbsp;
+    Powered by Claude AI &nbsp;·&nbsp;
+    No investment recommendation is made by this tool.
+</div>
+""", unsafe_allow_html=True)
