@@ -354,16 +354,17 @@ def _graph3(data: dict) -> plt.Figure:
 
     # Collect all competitor values
     comp_values = [c["value"] for c in competitors]
-    comp_names  = [c["name"] for c in competitors]
     all_values  = comp_values + [company_val]
 
-    # Build a kernel density estimate from competitor claims for the distribution curve
+    # Sort competitors by value for the legend table
+    sorted_comps = sorted(competitors, key=lambda c: c["value"], reverse=higher_better)
+
     from scipy.stats import gaussian_kde
 
     # Fit KDE on competitor claims only (the "landscape")
     if len(comp_values) >= 2:
         kde = gaussian_kde(comp_values, bw_method="silverman")
-        x_pad = (max(all_values) - min(all_values)) * 0.3
+        x_pad = (max(all_values) - min(all_values)) * 0.35
         x_lo = min(all_values) - x_pad
         x_hi = max(all_values) + x_pad
         x_range = np.linspace(x_lo, x_hi, 500)
@@ -372,109 +373,124 @@ def _graph3(data: dict) -> plt.Figure:
         x_range = np.array([])
         density = np.array([])
 
-    # Compute percentiles of the competitor landscape
     p10 = np.percentile(comp_values, 10)
     p50 = np.percentile(comp_values, 50)
     p90 = np.percentile(comp_values, 90)
 
-    fig, ax = plt.subplots(figsize=(10, 6))
+    # Two-panel layout: chart on left, competitor table on right
+    fig, (ax, ax_tbl) = plt.subplots(1, 2, figsize=(13, 6),
+                                      gridspec_kw={"width_ratios": [3, 1.2]})
     fig.patch.set_facecolor("white")
     ax.set_facecolor(VOLO_PALE)
 
-    # Plot distribution curve
+    # ── Left panel: distribution curve ──
     if len(x_range) > 0:
         ax.fill_between(x_range, density, alpha=0.18, color=ACCENT_BLUE)
         ax.plot(x_range, density, color=ACCENT_BLUE, linewidth=2, alpha=0.7)
 
-    # Plot individual competitor claims as a strip / rug + labeled markers
-    y_rug = -0.02 * max(density) if len(density) > 0 else -0.01
-    comp_colors = ["#5b7ea8"] * len(competitors)
+    # Rug ticks along x-axis (small, no labels — the table handles names)
+    for c in competitors:
+        ax.plot(c["value"], 0, marker="|", markersize=10, color="#5b7ea8",
+                zorder=8, markeredgewidth=1.5)
 
-    for i, c in enumerate(competitors):
-        ax.plot(c["value"], 0, marker="D", markersize=7, color="#5b7ea8",
-                zorder=8, markeredgecolor="white", markeredgewidth=0.8)
-        # Stagger labels to reduce overlap
-        y_offset = -0.06 * (max(density) if len(density) > 0 else 1) * (1 + (i % 3) * 0.7)
-        ax.annotate(
-            c["name"],
-            xy=(c["value"], 0), xytext=(c["value"], y_offset),
-            fontsize=7, color="#5b7ea8", ha="center", va="top",
-            fontweight="bold",
-            arrowprops=dict(arrowstyle="-", color="#5b7ea8", lw=0.5),
-        )
-
-    # Percentile lines on the competitor distribution
     y_top = max(density) if len(density) > 0 else 1
+
+    # Percentile lines — labels placed at staggered heights to avoid overlap
+    pct_label_heights = [0.92, 0.78, 0.64]
     line_cfg = [
         (p10, "#c0392b", "P10"),
         (p50, VOLO_GREEN, "P50"),
         (p90, ACCENT_ORANGE, "P90"),
     ]
-    for val, color, label in line_cfg:
-        ax.axvline(val, color=color, linewidth=1.8, linestyle="--", alpha=0.7, zorder=5)
-        ax.text(val, y_top * 1.02, f"{label}\n{val:.4g} {metric_unit}",
-                ha="center", va="bottom", fontsize=7.5, color=color,
-                fontweight="bold",
-                bbox=dict(boxstyle="round,pad=0.25", facecolor="white",
+    for (val, color, label), y_frac in zip(line_cfg, pct_label_heights):
+        ax.axvline(val, color=color, linewidth=1.5, linestyle="--", alpha=0.6, zorder=5)
+        ax.text(val, y_top * y_frac, f" {label}: {val:.4g}",
+                fontsize=7.5, color=color, fontweight="bold", va="center",
+                bbox=dict(boxstyle="round,pad=0.2", facecolor="white",
                           edgecolor=color, alpha=0.85))
 
-    # Company claim — bold highlighted marker
+    # Company claim — bold line + label at top
     ax.axvline(company_val, color=VOLO_GREEN, linewidth=2.8, linestyle="-", zorder=9)
-    # Place company label at top of chart
-    ax.text(company_val, y_top * 1.14,
-            f"{company}\n{company_val:.4g} {metric_unit}",
-            ha="center", va="bottom", fontsize=9.5, color=VOLO_GREEN,
+    ax.text(company_val, y_top * 1.08,
+            f"  {company}: {company_val:.4g} {metric_unit}",
+            ha="left", va="bottom", fontsize=9, color=VOLO_GREEN,
             fontweight="bold",
-            bbox=dict(boxstyle="round,pad=0.35", facecolor="white",
+            bbox=dict(boxstyle="round,pad=0.3", facecolor="white",
                       edgecolor=VOLO_GREEN, linewidth=2, alpha=0.95))
 
-    # Current best-in-class marker if provided
+    # Current best-in-class marker
     if current_best is not None:
-        ax.axvline(current_best, color="#888888", linewidth=1.5, linestyle=":",
-                   zorder=4, alpha=0.7)
-        ax.text(current_best, y_top * 0.85,
-                f"Current Best\n{current_best:.4g} {metric_unit}",
-                ha="center", va="top", fontsize=7, color="#666666",
-                fontweight="bold",
-                bbox=dict(boxstyle="round,pad=0.25", facecolor="#f5f5f5",
+        ax.axvline(current_best, color="#888888", linewidth=1.3, linestyle=":",
+                   zorder=4, alpha=0.6)
+        ax.text(current_best, y_top * 0.50,
+                f" Best today: {current_best:.4g}",
+                fontsize=7, color="#666666", va="center",
+                bbox=dict(boxstyle="round,pad=0.2", facecolor="#f5f5f5",
                           edgecolor="#bbbbbb", alpha=0.85))
 
     year_str = f" (Target ~{target_year})" if target_year else ""
-    direction = "→ Higher = Better" if higher_better else "→ Lower = Better"
+    direction = "Higher = Better" if higher_better else "Lower = Better"
 
     _apply_base_style(
         ax,
-        title=f"{company} — Technology Claims vs. Competitive Landscape{year_str}",
-        xlabel=f"{metric_name} ({metric_unit})  {direction}",
-        ylabel="Density of Competitor Claims"
+        title=f"{company} — Tech Claims vs. Competitors{year_str}",
+        xlabel=f"{metric_name} ({metric_unit})  [{direction}]",
+        ylabel=""
     )
-
-    # Hide y-axis ticks (density values aren't meaningful to the reader)
     ax.set_yticks([])
-    ax.set_ylabel("")
+    ax.set_ylim(bottom=-0.08 * y_top, top=y_top * 1.25)
 
-    # Extend y-axis to make room for labels
-    ax.set_ylim(bottom=-0.25 * y_top, top=y_top * 1.35)
+    # ── Right panel: compact competitor table ──
+    ax_tbl.axis("off")
+    ax_tbl.set_title(f"Competitor Claims\n({metric_unit})",
+                     fontsize=10, fontweight="bold", color=TEXT_DARK, pad=10)
 
-    ax.tick_params(axis="x", rotation=0)
+    # Build table data: rank, name, value
+    tbl_data = []
+    for i, c in enumerate(sorted_comps):
+        name = c["name"]
+        if len(name) > 22:
+            name = name[:20] + "…"
+        tbl_data.append([str(i + 1), name, f"{c['value']:.4g}"])
 
-    # Caption
-    n_comps = len(competitors)
-    caption = (
-        f"Distribution built from {n_comps} competitor performance claims/targets "
-        f"for {metric_name.lower()} ({metric_unit}). "
-        f"P10/P50/P90 reflect the competitive landscape spread.\n"
+    # Add company row highlighted
+    tbl_data.append(["★", company[:20], f"{company_val:.4g}"])
+
+    tbl = ax_tbl.table(
+        cellText=tbl_data,
+        colLabels=["#", "Company", metric_unit],
+        loc="upper center",
+        cellLoc="left",
+        colWidths=[0.12, 0.58, 0.30],
     )
-    if current_best and current_src:
-        caption += f"Current best-in-class: {current_best:.4g} {metric_unit} ({current_src}). "
-    if rationale:
-        caption += rationale
+    tbl.auto_set_font_size(False)
+    tbl.set_fontsize(7.5)
 
-    fig.text(0.5, -0.06, caption, ha="center", fontsize=7.8,
-             color=TEXT_MID, style="italic", wrap=True)
+    # Style the table
+    for (row, col), cell in tbl.get_celld().items():
+        cell.set_edgecolor("#d4e6da")
+        cell.set_linewidth(0.5)
+        if row == 0:  # header
+            cell.set_facecolor(VOLO_GREEN)
+            cell.set_text_props(color="white", fontweight="bold")
+            cell.set_height(0.06)
+        elif row == len(tbl_data):  # company row (last)
+            cell.set_facecolor("#e8f5e9")
+            cell.set_text_props(fontweight="bold", color=VOLO_GREEN)
+            cell.set_height(0.045)
+        else:
+            cell.set_facecolor("white" if row % 2 == 1 else "#f8fbf9")
+            cell.set_height(0.045)
+
+    # Brief caption below the chart
+    n_comps = len(competitors)
+    fig.text(0.35, 0.01,
+             f"Distribution of {n_comps} competitor claims · P10/P50/P90 of landscape shown",
+             ha="center", fontsize=7.5, color=TEXT_MID, style="italic")
 
     _add_ai_watermark(fig)
     fig.tight_layout()
+    fig.subplots_adjust(wspace=0.05)
     return fig
 
 
