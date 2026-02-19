@@ -561,9 +561,9 @@ After completing your web research, return the full JSON and nothing else — no
         company = analysis.get('company_name', 'Unknown')
         industry = analysis.get('industry', 'Unknown')
 
-        story.append(Paragraph(f"<b>{company}</b>", heading_style))
+        story.append(Paragraph(f"<b>{_esc(company)}</b>", heading_style))
         story.append(Paragraph(
-            f"Industry: {industry} &nbsp;|&nbsp; "
+            f"Industry: {_esc(industry)} &nbsp;|&nbsp; "
             f"Report Date: {datetime.now().strftime('%B %d, %Y')}",
             body_style
         ))
@@ -788,15 +788,14 @@ After completing your web research, return the full JSON and nothing else — no
         risks = comp_landscape.get('competitive_risks', [])
         acquirers = comp_landscape.get('potential_acquirers', [])
         if risks or acquirers:
-            row = []
             if risks:
-                row.append(["Key Competitive Risks"] + [f"• {r}" for r in risks])
+                story.append(Paragraph("<b>Key Competitive Risks:</b>", body_style))
+                for r in risks:
+                    story.append(Paragraph(f"• {_esc(r)}", body_style))
             if acquirers:
-                row.append(["Potential Acquirers"] + [f"• {a}" for a in acquirers])
-            for section_items in row:
-                story.append(Paragraph(f"<b>{section_items[0]}:</b>", body_style))
-                for item in section_items[1:]:
-                    story.append(Paragraph(item, body_style))
+                story.append(Paragraph("<b>Potential Acquirers:</b>", body_style))
+                for a in acquirers:
+                    story.append(Paragraph(f"• {_esc(a)}", body_style))
 
         story.append(PageBreak())
 
@@ -921,7 +920,7 @@ After completing your web research, return the full JSON and nothing else — no
 
         conclusion_intro = (
             f"This report identified <b>{len(unverified)} unverified claims</b> across "
-            f"{company}'s pitch deck, of which <b>{len(critical_claims)} are critical</b> and "
+            f"{_esc(company)}'s pitch deck, of which <b>{len(critical_claims)} are critical</b> and "
             f"<b>{len(high_claims)} are high priority</b> for investigation."
         )
         story.append(Paragraph(conclusion_intro, body_style))
