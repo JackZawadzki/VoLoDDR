@@ -165,7 +165,7 @@ def _extract_graph_data(analysis: dict, client: Anthropic) -> dict:
 
     while True:
         response = client.messages.create(
-            model="claude-opus-4-6",
+            model="claude-sonnet-4-5",
             max_tokens=8000,
             temperature=0.1,
             tools=[_WEB_SEARCH_TOOL],
