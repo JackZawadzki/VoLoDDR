@@ -156,7 +156,17 @@ def _extract_graph_data(analysis: dict, client: Anthropic) -> dict:
     raw = re.sub(r"^```[a-z]*\n?", "", raw)
     raw = re.sub(r"\n?```$", "", raw)
 
-    return json.loads(raw)
+    # Extract just the JSON object in case there's surrounding prose
+    json_match = re.search(r'\{[\s\S]*\}', raw)
+    if json_match:
+        raw = json_match.group()
+
+    try:
+        return json.loads(raw)
+    except json.JSONDecodeError:
+        # Strip any non-standard characters and retry
+        raw_clean = raw.encode("ascii", errors="ignore").decode("ascii")
+        return json.loads(raw_clean)
 
 
 # ── Graph 1: Company projections vs. established peers ────────────────────────
@@ -374,6 +384,18 @@ def figures_to_pdf(figs: list, output_path: str, company_name: str):
 
 # ── Public entry point ────────────────────────────────────────────────────────
 
+def _blank_figure(message: str) -> plt.Figure:
+    """Return a plain figure with an error message, used as a fallback."""
+    fig, ax = plt.subplots(figsize=(9, 5))
+    fig.patch.set_facecolor("white")
+    ax.set_facecolor("#f8f8f8")
+    ax.text(0.5, 0.5, message, ha="center", va="center",
+            fontsize=11, color="#888888", transform=ax.transAxes, wrap=True)
+    ax.axis("off")
+    fig.tight_layout()
+    return fig
+
+
 def build_graphs(analysis: dict, client: Anthropic) -> list[plt.Figure]:
     """
     Extract graph data from the analysis JSON using Claude, then build and
@@ -386,9 +408,17 @@ def build_graphs(analysis: dict, client: Anthropic) -> list[plt.Figure]:
     Returns:
         [fig1, fig2, fig3]  — ready for st.pyplot() or PDF embedding.
     """
-    graph_data = _extract_graph_data(analysis, client)
-    return [
-        _graph1(graph_data),
-        _graph2(graph_data),
-        _graph3(graph_data),
-    ]
+    try:
+        graph_data = _extract_graph_data(analysis, client)
+    except Exception as e:
+        msg = f"Chart data extraction failed: {e}"
+        return [_blank_figure(msg)] * 3
+
+    figs = []
+    for build_fn in (_graph1, _graph2, _graph3):
+        try:
+            figs.append(build_fn(graph_data))
+        except Exception as e:
+            figs.append(_blank_figure(f"Chart unavailable: {e}"))
+
+    return figs
