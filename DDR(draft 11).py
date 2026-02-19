@@ -55,10 +55,28 @@ def _esc(text) -> str:
             .replace("$", "&#36;"))
 
 SOURCE_CREDIBILITY = {
-    'bloomberg': 0.95, 'reuters': 0.90, 'iea': 0.95, 'bain': 0.85,
-    'mckinsey': 0.85, 'bcg': 0.85, 'sec': 0.95, 'crunchbase': 0.85,
-    'pitchbook': 0.90, 'cbinsights': 0.85, 'court_records': 0.95,
-    'government': 0.85, 'industry_report': 0.75, 'unknown': 0.20
+    # Tier 1 — official filings, government, top-tier data providers
+    'bloomberg': 0.95, 'bloombergnef': 0.95, 'reuters': 0.90,
+    'iea': 0.95, 'sec': 0.95, 'court_records': 0.95, 'annual report': 0.90,
+    'sec.gov': 0.95, 'epa': 0.90, 'doe': 0.90, 'nrel': 0.90,
+    'world bank': 0.90, 'imf': 0.90, 'eurostat': 0.90,
+    # Tier 2 — reputable research / consulting / data platforms
+    'pitchbook': 0.90, 'bain': 0.85, 'mckinsey': 0.85, 'bcg': 0.85,
+    'deloitte': 0.85, 'kpmg': 0.85, 'pwc': 0.85, 'ey': 0.85,
+    'crunchbase': 0.85, 'cbinsights': 0.85, 'cb insights': 0.85,
+    'grand view': 0.80, 'mordor intelligence': 0.80, 'marketsandmarkets': 0.80,
+    'statista': 0.80, 'ibisworld': 0.80, 'frost & sullivan': 0.80,
+    'government': 0.85, 'industry_report': 0.75,
+    # Tier 3 — tech/business press
+    'techcrunch': 0.75, 'wsj': 0.85, 'wall street journal': 0.85,
+    'financial times': 0.85, 'ft.com': 0.85, 'cnbc': 0.75,
+    'fortune': 0.75, 'forbes': 0.70, 'wired': 0.70, 'mit technology': 0.80,
+    'nature': 0.90, 'science': 0.90, 'arxiv': 0.75,
+    # Tier 4 — company press releases / general news
+    'press release': 0.50, 'company website': 0.45, 'linkedin': 0.40,
+    'wikipedia': 0.55, 'blog': 0.35,
+    # Default
+    'unknown': 0.20,
 }
 
 
@@ -470,7 +488,9 @@ After completing your web research, return the full JSON and nothing else — no
             claim['ai_confidence_stars'] = self.scorer.get_stars(conf)
 
         for claim in analysis.get('unverified_claims', []):
-            conf = self.scorer.score_claim(sources=[])  # unverified by definition
+            # Unverified claims have no independent sources — score reflects that
+            conf = self.scorer.score_claim(sources=[], has_numbers=bool(
+                claim.get('outcome_if_true', {}).get('market_opportunity_usd')))
             claim['ai_confidence_score'] = conf
             claim['ai_confidence_stars'] = self.scorer.get_stars(conf)
 
@@ -481,6 +501,17 @@ After completing your web research, return the full JSON and nothing else — no
                 conf = self.scorer.score_claim(sources=bank.get('sources', []), has_numbers=True)
                 bank['ai_confidence_score'] = conf
                 bank['ai_confidence_stars'] = self.scorer.get_stars(conf)
+
+        # Score competitive landscape entries
+        comp = analysis.get('competitive_landscape', {})
+        for peer in comp.get('peer_competitors', []):
+            conf = self.scorer.score_claim(sources=peer.get('sources', []), has_numbers=True)
+            peer['ai_confidence_score'] = conf
+            peer['ai_confidence_stars'] = self.scorer.get_stars(conf)
+        for leader in comp.get('market_leaders', []):
+            conf = self.scorer.score_claim(sources=leader.get('sources', []), has_numbers=True)
+            leader['ai_confidence_score'] = conf
+            leader['ai_confidence_stars'] = self.scorer.get_stars(conf)
 
         print("   ✓ Confidence scores added")
         return analysis
@@ -644,7 +675,7 @@ After completing your web research, return the full JSON and nothing else — no
         priority_order = ['CRITICAL', 'HIGH', 'MEDIUM', 'LOW']
 
         def render_unverified_block(uc, counter):
-            """Render a single unverified claim with outcome sizing."""
+            """Render a single unverified claim with outcome sizing and confidence."""
             priority = uc.get('priority', 'LOW')
             outcome = uc.get('outcome_if_true') or {}
             mkt_usd = outcome.get('market_opportunity_usd') or 0
@@ -652,8 +683,12 @@ After completing your web research, return the full JSON and nothing else — no
                        else (f"&#36;{mkt_usd/1e6:.0f}M" if mkt_usd > 0 else "Not quantified"))
             use_style = flag_style if priority in ['MEDIUM', 'LOW'] else alert_style
 
+            stars = uc.get('ai_confidence_stars', '')
+            score = uc.get('ai_confidence_score')
+            conf_str = f" &nbsp;| &nbsp;AI Confidence: {stars} ({score:.0%})" if score is not None else ""
+
             story.append(Paragraph(
-                f"<b>#{counter} [{priority}] {_esc(uc.get('claim', 'Not specified'))}</b><br/>"
+                f"<b>#{counter} [{priority}] {_esc(uc.get('claim', 'Not specified'))}</b>{conf_str}<br/>"
                 f"<b>Why Unverified:</b> {_esc(uc.get('why_unverified', 'No independent verification found'))}",
                 use_style
             ))
@@ -682,19 +717,22 @@ After completing your web research, return the full JSON and nothing else — no
             story.append(Spacer(1, 0.2*inch))
 
         def render_claims_table(claims, include_sources=False):
-            """Render a compact claims list — status + label only, no duplication of outcome detail."""
+            """Render a compact claims list — status + label + confidence score."""
             for claim in claims:
                 v_status = claim.get('verification_status', 'UNVERIFIED')
                 use_style = (verified_style if v_status == 'VERIFIED'
                              else flag_style if v_status == 'PARTIALLY VERIFIED'
                              else alert_style)
                 label = '✅' if v_status == 'VERIFIED' else ('⚠️' if v_status == 'PARTIALLY VERIFIED' else '❌')
+                stars = claim.get('ai_confidence_stars', '')
+                score = claim.get('ai_confidence_score')
+                conf_str = f" &nbsp;| &nbsp;AI Confidence: {stars} ({score:.0%})" if score is not None else ""
                 claim_text = (
-                    f"<b>{label} {_esc(claim.get('claim', 'Not specified'))}</b><br/>"
+                    f"<b>{label} {_esc(claim.get('claim', 'Not specified'))}</b>{conf_str}<br/>"
                     f"{_esc(claim.get('source_label', v_status))}"
                 )
                 if include_sources and claim.get('sources'):
-                    claim_text += f" — <i>{_esc(', '.join(claim['sources'][:2]))}</i>"
+                    claim_text += f" — <i>{_esc(', '.join(claim['sources'][:3]))}</i>"
                 story.append(Paragraph(claim_text, use_style))
                 story.append(Spacer(1, 0.08*inch))
 
@@ -714,14 +752,17 @@ After completing your web research, return the full JSON and nothing else — no
             for comp in peer_comps:
                 funding = comp.get('funding_raised_usd') or 0
                 funding_str = f"&#36;{funding/1e6:.0f}M raised" if funding else "Funding unknown"
+                score = comp.get('ai_confidence_score')
+                stars = comp.get('ai_confidence_stars', '')
+                conf_tag = f" &nbsp;| &nbsp;{stars} ({score:.0%})" if score is not None else ""
                 peer_text = (
-                    f"<b>{_esc(comp.get('name', 'Unknown'))}</b> ({_esc(comp.get('stage', '?'))} — {funding_str})<br/>"
+                    f"<b>{_esc(comp.get('name', 'Unknown'))}</b> ({_esc(comp.get('stage', '?'))} — {funding_str}){conf_tag}<br/>"
                     f"{_esc(comp.get('description', ''))}<br/>"
                     f"<b>Their edge:</b> {_esc(comp.get('their_differentiator', 'N/A'))}<br/>"
                     f"<b>Company's claimed advantage:</b> {_esc(comp.get('company_advantage_claimed', 'N/A'))}"
                 )
                 if comp.get('sources'):
-                    peer_text += f"<br/><i>Sources: {_esc(', '.join(comp['sources'][:2]))}</i>"
+                    peer_text += f"<br/><i>Sources: {_esc(', '.join(comp['sources'][:3]))}</i>"
                 story.append(Paragraph(peer_text, body_style))
                 story.append(Spacer(1, 0.12*inch))
 
@@ -730,14 +771,17 @@ After completing your web research, return the full JSON and nothing else — no
         if leaders:
             story.append(Paragraph("Market Leaders & Incumbents", subheading_style))
             for leader in leaders:
+                score = leader.get('ai_confidence_score')
+                stars = leader.get('ai_confidence_stars', '')
+                conf_tag = f" &nbsp;| &nbsp;{stars} ({score:.0%})" if score is not None else ""
                 leader_text = (
-                    f"<b>{_esc(leader.get('name', 'Unknown'))}</b> — {_esc(leader.get('market_position', ''))}<br/>"
+                    f"<b>{_esc(leader.get('name', 'Unknown'))}</b> — {_esc(leader.get('market_position', ''))}{conf_tag}<br/>"
                     f"{_esc(leader.get('valuation_or_revenue', ''))}<br/>"
                     f"{_esc(leader.get('description', ''))}<br/>"
                     f"<b>Threat to company:</b> {_esc(leader.get('threat_to_company', 'N/A'))}"
                 )
                 if leader.get('sources'):
-                    leader_text += f"<br/><i>Sources: {_esc(', '.join(leader['sources'][:2]))}</i>"
+                    leader_text += f"<br/><i>Sources: {_esc(', '.join(leader['sources'][:3]))}</i>"
                 story.append(Paragraph(leader_text, body_style))
                 story.append(Spacer(1, 0.12*inch))
 
@@ -908,6 +952,79 @@ After completing your web research, return the full JSON and nothing else — no
             f"<b>Report Generated:</b> {datetime.now().strftime('%B %d, %Y at %H:%M:%S')}"
         )
         story.append(Paragraph(method_text, body_style))
+
+        # ── SOURCES PAGE ─────────────────────────────────────────────────────
+        story.append(PageBreak())
+        story.append(Paragraph("SOURCES", heading_style))
+        story.append(Paragraph(
+            "<i>All sources referenced in this report, grouped by the section that cited them.</i>",
+            body_style
+        ))
+        story.append(Spacer(1, 0.15*inch))
+
+        # Collect every source string from all sections
+        section_sources = {}  # {section_label: [source strings]}
+
+        def _collect(obj, section_label):
+            """Recursively gather source strings from lists and dicts."""
+            if isinstance(obj, dict):
+                for key in ('sources', 'source', 'current_best_source'):
+                    val = obj.get(key)
+                    if isinstance(val, list):
+                        for s in val:
+                            if isinstance(s, str) and s.strip():
+                                section_sources.setdefault(section_label, []).append(s.strip())
+                    elif isinstance(val, str) and val.strip():
+                        section_sources.setdefault(section_label, []).append(val.strip())
+                for key in ('source_note', 'note'):
+                    val = obj.get(key)
+                    if isinstance(val, str) and val.strip():
+                        section_sources.setdefault(section_label, []).append(val.strip())
+                for v in obj.values():
+                    if isinstance(v, (dict, list)):
+                        _collect(v, section_label)
+            elif isinstance(obj, list):
+                for item in obj:
+                    _collect(item, section_label)
+
+        _collect(analysis.get('technology_claims', []), 'Technology Claims')
+        _collect(analysis.get('market_claims', []), 'Market Claims')
+        _collect(analysis.get('unverified_claims', []), 'Unverified Claims')
+        _collect(analysis.get('competitive_landscape', {}), 'Competitive Landscape')
+        _collect(analysis.get('company_financial_legal_status', {}), 'Financial & Legal Status')
+        _collect(analysis.get('outcome_magnitude', {}), 'Outcome Magnitude')
+        _collect(analysis.get('graph_data', {}), 'Graph Data')
+
+        total_unique = set()
+        if section_sources:
+            for section_label in ['Technology Claims', 'Market Claims',
+                                  'Competitive Landscape', 'Financial & Legal Status',
+                                  'Unverified Claims', 'Outcome Magnitude', 'Graph Data']:
+                sources = section_sources.get(section_label, [])
+                if not sources:
+                    continue
+                # Deduplicate within section, preserve order
+                seen = set()
+                unique = []
+                for s in sources:
+                    key = s.lower()
+                    if key not in seen:
+                        seen.add(key)
+                        unique.append(s)
+                        total_unique.add(key)
+
+                story.append(Paragraph(f"<b>{section_label}</b>", subheading_style))
+                for s in unique:
+                    story.append(Paragraph(f"• {_esc(s)}", body_style))
+                story.append(Spacer(1, 0.1*inch))
+
+            story.append(Spacer(1, 0.15*inch))
+            story.append(Paragraph(
+                f"<b>Total unique sources cited:</b> {len(total_unique)}",
+                body_style
+            ))
+        else:
+            story.append(Paragraph("No structured source data available.", body_style))
 
         doc.build(story)
         print(f"   ✓ PDF generated: {output_path}")
