@@ -931,10 +931,10 @@ After completing your web research, return the full JSON and nothing else — no
             for uc in critical_claims:
                 outcome = uc.get('outcome_if_true') or {}
                 mkt_usd = outcome.get('market_opportunity_usd') or 0
-                mkt_str = (f"${mkt_usd/1e9:.1f}B" if mkt_usd >= 1e9
-                           else (f"${mkt_usd/1e6:.0f}M" if mkt_usd > 0 else "unquantified"))
+                mkt_str = (f"&#36;{mkt_usd/1e9:.1f}B" if mkt_usd >= 1e9
+                           else (f"&#36;{mkt_usd/1e6:.0f}M" if mkt_usd > 0 else "unquantified"))
                 story.append(Paragraph(
-                    f"• <b>{uc.get('claim', 'Not specified')}</b> — "
+                    f"• <b>{_esc(uc.get('claim', 'Not specified'))}</b> — "
                     f"potential outcome: {mkt_str}",
                     body_style
                 ))
@@ -942,7 +942,7 @@ After completing your web research, return the full JSON and nothing else — no
         if if_all.get('framing'):
             story.append(Spacer(1, 0.15*inch))
             story.append(Paragraph("Overall Opportunity Context:", subheading_style))
-            story.append(Paragraph(if_all.get('framing', ''), body_style))
+            story.append(Paragraph(_esc(if_all.get('framing', '')), body_style))
 
         story.append(Spacer(1, 0.3*inch))
         method_text = (
