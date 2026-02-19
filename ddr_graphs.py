@@ -195,7 +195,7 @@ def _extract_graph_data(analysis: dict, client: Anthropic) -> dict:
 
     while True:
         response = client.messages.create(
-            model="claude-sonnet-4-5",
+            model="claude-opus-4-6",
             max_tokens=8000,
             temperature=0.1,
             tools=[_WEB_SEARCH_TOOL],
@@ -536,21 +536,30 @@ def _blank_figure(message: str) -> plt.Figure:
 
 def build_graphs(analysis: dict, client: Anthropic) -> list[plt.Figure]:
     """
-    Extract graph data from the analysis JSON using Claude, then build and
-    return three matplotlib figures.
+    Build three matplotlib figures from graph data.
+
+    If the analysis dict already contains a "graph_data" key (produced by the
+    main Opus analysis call), those numbers are used directly — no extra API
+    call needed.  If "graph_data" is missing, falls back to a separate Opus
+    + web search call to get real data.
 
     Args:
         analysis: The scored analysis dict from DueDiligenceAnalyzer.
-        client:   An initialised anthropic.Anthropic client.
+        client:   An initialised anthropic.Anthropic client (used only if
+                  graph_data is missing from the analysis).
 
     Returns:
         [fig1, fig2, fig3]  — ready for st.pyplot() or PDF embedding.
     """
-    try:
-        graph_data = _extract_graph_data(analysis, client)
-    except Exception as e:
-        msg = f"Chart data extraction failed: {e}"
-        return [_blank_figure(msg)] * 3
+    graph_data = analysis.get("graph_data")
+
+    if graph_data is None:
+        # Fallback: separate Opus + web search call to get real data
+        try:
+            graph_data = _extract_graph_data(analysis, client)
+        except Exception as e:
+            msg = f"Chart data extraction failed: {e}"
+            return [_blank_figure(msg)] * 3
 
     figs = []
     for build_fn in (_graph1, _graph2, _graph3):

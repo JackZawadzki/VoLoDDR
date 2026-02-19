@@ -295,7 +295,54 @@ Return comprehensive JSON:
         "key_dependencies": ["Specific dependency 1", "Specific dependency 2"]
     }},
 
-    "sources_consulted": 30
+    "sources_consulted": 30,
+
+    "graph_data": {{
+        "company_name": "Same as top-level company_name",
+        "sector": "Same as top-level industry",
+        "graph1": {{
+            "years": [2024, 2025, 2026, 2027, 2028, 2029, 2030],
+            "company_revenue_usd_m": [0, 0, 5, 20, 60, 150, 350],
+            "peers": [
+                {{
+                    "name": "Real Peer Co A (public or well-known)",
+                    "years": [2024, 2025, 2026, 2027, 2028, 2029, 2030],
+                    "revenue_usd_m": [500, 600, 720, 850, 1000, 1150, 1300]
+                }},
+                {{
+                    "name": "Real Peer Co B",
+                    "years": [2024, 2025, 2026, 2027, 2028, 2029, 2030],
+                    "revenue_usd_m": [200, 240, 290, 340, 400, 460, 530]
+                }}
+            ],
+            "note": "Peer revenues sourced from [real sources — annual reports, Crunchbase, etc.]"
+        }},
+        "graph2": {{
+            "years": [2020, 2021, 2022, 2023, 2024, 2025, 2026, 2027, 2028, 2029, 2030],
+            "tam_usd_b": [10, 12, 14, 17, 20, 24, 29, 35, 42, 50, 60],
+            "sam_usd_b": [1.5, 1.8, 2.2, 2.7, 3.3, 4.0, 4.9, 6.0, 7.3, 8.9, 10.8],
+            "tam_label": "Global [Sector] Market",
+            "sam_label": "Serviceable Market ([sub-niche])",
+            "source_note": "Source: [IEA, BloombergNEF, Grand View Research, etc.]"
+        }},
+        "graph3": {{
+            "metric_name": "The single most important quantifiable performance metric for this technology",
+            "metric_unit": "unit (e.g. miles, %, Wh/kg, $/ton, MW, Gbps)",
+            "target_year": 2030,
+            "company_claim": 500,
+            "competitor_claims": [
+                {{"name": "Competitor A", "value": 400, "source": "Source"}},
+                {{"name": "Competitor B", "value": 450, "source": "Source"}},
+                {{"name": "Competitor C", "value": 520, "source": "Source"}},
+                {{"name": "Competitor D", "value": 435, "source": "Source"}},
+                {{"name": "Competitor E", "value": 470, "source": "Source"}}
+            ],
+            "higher_is_better": true,
+            "current_best_in_class": 350,
+            "current_best_source": "Source for current best",
+            "rationale": "Why this metric was chosen as the key performance indicator"
+        }}
+    }}
 }}
 
 IMPORTANT:
@@ -303,6 +350,11 @@ IMPORTANT:
 - Every unverified claim needs 2 concrete investigation steps naming specific data sources or tests
 - All competitor names must be real companies with verifiable existence
 - Do not recommend whether to invest — only surface what is unverified and what it could mean
+
+GRAPH DATA REQUIREMENTS (the "graph_data" field):
+- graph1: Use the company's own revenue projections from the deck. For peers, use 2-3 real public/well-known competitors in the same sector with realistic revenue figures based on your knowledge.
+- graph2: TAM/SAM should reflect real market research figures (IEA, BloombergNEF, Grand View, Mordor Intelligence, etc.).
+- graph3: Identify the SINGLE most important quantifiable performance metric for this company's core technology (e.g. battery energy density Wh/kg, solar efficiency %, EV range miles, carbon capture cost $/ton, wind capacity MW, drug efficacy %, etc.). Find the company's claim for that metric, then list 5-15 real competitor claims/targets for the SAME metric around the same target year. This is for technology forecasting — mapping where the company sits in the competitive distribution.
 """
 
         response_text = ""

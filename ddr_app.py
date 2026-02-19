@@ -330,7 +330,10 @@ if run_button and uploaded_file:
 
         # ── Step 5: Generate graphs ───────────────────────────────────────────
         with st.status("📈 Generating analysis charts...", expanded=True) as status:
-            st.write("Building projections, market growth, and Monte Carlo charts...")
+            if scored.get("graph_data"):
+                st.write("Graph data found in analysis — building charts...")
+            else:
+                st.write("Graph data missing — running Opus + web search fallback...")
             graph_client = Anthropic(api_key=api_key)
             figs = build_graphs(scored, graph_client)
 
