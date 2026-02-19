@@ -41,6 +41,16 @@ GRID_COLOR      = "#d4e6da"
 TEXT_DARK       = "#1a1a1a"
 TEXT_MID        = "#4a4a4a"
 
+def _add_ai_watermark(fig):
+    """Add a subtle 'AI Estimates — Illustrative Only' watermark to a figure."""
+    fig.text(
+        0.99, 0.01,
+        "⚠ AI Estimates — Illustrative Only · Verify before use",
+        ha="right", va="bottom", fontsize=7, color="#aaaaaa",
+        style="italic", transform=fig.transFigure,
+    )
+
+
 def _apply_base_style(ax, title, xlabel, ylabel):
     ax.set_facecolor(VOLO_PALE)
     ax.set_title(title, fontsize=13, fontweight="bold", color=TEXT_DARK, pad=12)
@@ -68,34 +78,36 @@ def _billions(x, _):
 # ── Claude data extraction ────────────────────────────────────────────────────
 
 EXTRACTION_PROMPT = """
-You are extracting structured numerical data from a due diligence analysis JSON
-so we can plot three specific charts. Return ONLY valid JSON — no markdown, no prose.
+You are building structured numerical data for three investment analysis charts.
+You have access to web_search — use it extensively to find real, verified numbers.
 
-From the analysis provided, extract:
+STEP 1 — Read the due diligence analysis provided at the end of this prompt.
+STEP 2 — Use web_search to look up REAL data for:
+  • Peer company revenues (search "[Company] annual revenue 2023 2024")
+  • Market size (search "[sector] market size TAM 2024 BloombergNEF IEA Grand View Research")
+  • Market growth rates (search "[sector] CAGR market growth forecast 2030")
+  Do at least 4-6 searches before producing your final answer.
+STEP 3 — Return ONLY valid JSON with no markdown, no prose.
+
+CHART DATA TO PRODUCE:
 
 1. COMPANY PROJECTIONS vs PEERS (revenue timeline)
-   - The subject company's own revenue projections by year (use years 2024-2030 or
-     whatever range is mentioned; infer/interpolate if needed).
-   - 2-3 established/public peer companies in the same sector with known revenue
-     figures for roughly the same period. Use realistic, publicly known revenue
-     numbers for these peers — do NOT invent them.
+   - The subject company's own revenue projections by year (2024-2030, from the analysis).
+   - 2-3 established/public peer companies in the same sector. Use WEB SEARCH to get
+     their real revenues — do not guess. Cite the source in the "note" field.
 
 2. MARKET SIZE OVER TIME
-   - The global TAM (Total Addressable Market) for the company's sector, in $B,
-     for years 2020-2030 (use known market research data for the sector).
-   - The sub-niche SAM (Serviceable Addressable Market) the company targets, in $B,
-     for the same period.
-   - If exact figures aren't in the analysis, use well-known industry estimates
-     for the identified sector and scale the SAM as a reasonable fraction of TAM.
+   - Global TAM for the company's sector in $B, years 2020-2030.
+   - Sub-niche SAM the company targets, in $B, same period.
+   - Use WEB SEARCH to find real market research figures (BloombergNEF, IEA, Grand View,
+     Mordor Intelligence, etc.). Cite the source in source_note.
 
 3. MONTE CARLO — 2035 REVENUE
-   - A realistic mean revenue estimate for 2035 in $M (extrapolate from projections).
-   - A realistic std_dev in $M reflecting claim uncertainty (higher uncertainty =
-     larger std; use 40-70% of mean as a starting point unless data suggests otherwise).
-   - Use a log-normal distribution shape (provide log-space mu and sigma so that
-     the resulting distribution is right-skewed, as is typical for startup outcomes).
+   - Calibrate the distribution using the company's projections AND verified industry
+     growth benchmarks found via web search.
+   - Higher sigma = more uncertainty (use 0.6-1.0 for early-stage, 0.4-0.6 for later).
 
-Return this exact JSON structure (fill in all numbers):
+Return this exact JSON structure:
 {
   "company_name": "string",
   "sector": "string",
@@ -114,7 +126,7 @@ Return this exact JSON structure (fill in all numbers):
         "revenue_usd_m": [200, 240, 290, 340, 400, 460, 530]
       }
     ],
-    "note": "Short note on data provenance or caveats"
+    "note": "Peer revenues sourced from [actual sources found via search]"
   },
   "graph2": {
     "years": [2020, 2021, 2022, 2023, 2024, 2025, 2026, 2027, 2028, 2029, 2030],
@@ -122,36 +134,69 @@ Return this exact JSON structure (fill in all numbers):
     "sam_usd_b": [1.5, 1.8, 2.2, 2.7, 3.3, 4.0, 4.9, 6.0, 7.3, 8.9, 10.8],
     "tam_label": "Global [Sector] Market",
     "sam_label": "Serviceable Market ([sub-niche])",
-    "source_note": "Source: [e.g. BloombergNEF, IEA, Grand View Research]"
+    "source_note": "Source: [actual sources found via search, e.g. BloombergNEF 2024]"
   },
   "graph3": {
     "mean_2035_usd_m": 800,
     "lognorm_mu": 6.5,
     "lognorm_sigma": 0.7,
     "n_simulations": 50000,
-    "rationale": "Brief explanation of distribution assumptions"
+    "rationale": "Distribution calibrated using [sources found via search]"
   }
 }
 
 Here is the due diligence analysis:
 """
 
+_WEB_SEARCH_TOOL = {
+    "type": "web_search_20250305",
+    "name": "web_search",
+}
+
 
 def _extract_graph_data(analysis: dict, client: Anthropic) -> dict:
-    """Ask Claude to pull structured graph data out of the analysis JSON."""
+    """Ask Claude to pull structured graph data out of the analysis JSON,
+    using web search to verify peer revenues and market size figures."""
     analysis_json = json.dumps(analysis, indent=2)[:40_000]  # guard token limit
 
-    response = client.messages.create(
-        model="claude-opus-4-6",
-        max_tokens=4096,
-        temperature=0.1,
-        messages=[{
-            "role": "user",
-            "content": EXTRACTION_PROMPT + analysis_json
-        }]
-    )
+    # Agentic loop — keep going until Claude stops using tools
+    messages = [{"role": "user", "content": EXTRACTION_PROMPT + analysis_json}]
+    final_text = ""
 
-    raw = response.content[0].text.strip()
+    while True:
+        response = client.messages.create(
+            model="claude-opus-4-6",
+            max_tokens=8000,
+            temperature=0.1,
+            tools=[_WEB_SEARCH_TOOL],
+            messages=messages,
+        )
+
+        # Collect any text from this turn
+        for block in response.content:
+            if hasattr(block, "text"):
+                final_text = block.text  # keep the last text block
+
+        # If Claude is done (no more tool calls), break
+        if response.stop_reason == "end_turn":
+            break
+
+        # Otherwise feed tool results back and continue
+        messages.append({"role": "assistant", "content": response.content})
+        tool_results = []
+        for block in response.content:
+            if block.type == "tool_use":
+                tool_results.append({
+                    "type": "tool_result",
+                    "tool_use_id": block.id,
+                    "content": "",   # web_search results are injected by the API
+                })
+        if tool_results:
+            messages.append({"role": "user", "content": tool_results})
+        else:
+            break  # no tool calls but stop_reason wasn't end_turn — exit anyway
+
+    raw = final_text.strip()
     # Strip markdown fences if present
     raw = re.sub(r"^```[a-z]*\n?", "", raw)
     raw = re.sub(r"\n?```$", "", raw)
@@ -208,6 +253,7 @@ def _graph1(data: dict) -> plt.Figure:
         fig.text(0.5, -0.04, f"Note: {note}", ha="center",
                  fontsize=7.5, color=TEXT_MID, style="italic")
 
+    _add_ai_watermark(fig)
     fig.tight_layout()
     return fig
 
@@ -256,6 +302,7 @@ def _graph2(data: dict) -> plt.Figure:
         fig.text(0.5, -0.04, src_note, ha="center",
                  fontsize=7.5, color=TEXT_MID, style="italic")
 
+    _add_ai_watermark(fig)
     fig.tight_layout()
     return fig
 
@@ -336,6 +383,7 @@ def _graph3(data: dict) -> plt.Figure:
     fig.text(0.5, -0.06, caption, ha="center", fontsize=7.8,
              color=TEXT_MID, style="italic", wrap=True)
 
+    _add_ai_watermark(fig)
     fig.tight_layout()
     return fig
 
