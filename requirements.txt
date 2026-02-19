@@ -3,3 +3,5 @@ anthropic
 pypdf
 reportlab
 python-dotenv
+matplotlib
+numpy
