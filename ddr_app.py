@@ -297,8 +297,8 @@ if run_button and uploaded_file:
             status.update(label="📄 PDF extracted", state="complete")
 
         # ── Step 2: Analyse ───────────────────────────────────────────────────
-        with st.status("🔬 Running deep analysis (2–4 minutes)...", expanded=True) as status:
-            st.write("Identifying claims, verification gaps, and competitive landscape...")
+        with st.status("🔬 Running deep analysis with web research (3–6 minutes)...", expanded=True) as status:
+            st.write("Searching the web for real data, verifying claims, building competitive landscape & graph data...")
             analysis = analyzer.analyze(pitch_text)
 
             if "error" in analysis:
@@ -331,9 +331,9 @@ if run_button and uploaded_file:
         # ── Step 5: Generate graphs ───────────────────────────────────────────
         with st.status("📈 Generating analysis charts...", expanded=True) as status:
             if scored.get("graph_data"):
-                st.write("Graph data found in analysis — building charts...")
+                st.write("Graph data found in analysis (web-verified) — building charts...")
             else:
-                st.write("Graph data missing — running Opus + web search fallback...")
+                st.write("Graph data missing from main analysis — running Opus + web search fallback...")
             graph_client = Anthropic(api_key=api_key)
             figs = build_graphs(scored, graph_client)
 

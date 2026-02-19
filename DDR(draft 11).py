@@ -124,13 +124,19 @@ class DueDiligenceAnalyzer:
             print(f"   ⚠️  Deck is large — analysis will use the first ~60,000 characters")
         return text
 
+    _WEB_SEARCH_TOOL = {
+        "type": "web_search_20250305",
+        "name": "web_search",
+    }
+
     def analyze(self, pitch_text: str) -> Dict:
         """
-        Deep due diligence: surfaces unverified claims, flags what needs
-        investigation, and sizes the potential outcome if each claim is true.
+        Deep due diligence with live web research: surfaces unverified claims,
+        flags what needs investigation, and sizes the potential outcome if each
+        claim is true.  Uses web_search to verify data in real time.
         """
-        print("\n🔬 Running deep analysis (this will take 2-4 minutes)...")
-        print("   Identifying claims, verification gaps, and outcome comparables...")
+        print("\n🔬 Running deep analysis with web research (this will take 3-6 minutes)...")
+        print("   Identifying claims, searching for verification, and building graph data...")
 
         text_preview = pitch_text[:60000]
 
@@ -351,40 +357,102 @@ IMPORTANT:
 - All competitor names must be real companies with verifiable existence
 - Do not recommend whether to invest — only surface what is unverified and what it could mean
 
+WEB RESEARCH REQUIREMENTS:
+You have access to web_search — USE IT EXTENSIVELY before producing your final JSON.
+Do at least 8-12 searches to verify and enrich your analysis:
+  • Search for the company name + "funding" / "crunchbase" / "news"
+  • Search for competitor names + "revenue" / "valuation" / "market share"
+  • Search for "[sector] market size TAM 2024 2025" (BloombergNEF, IEA, Grand View Research)
+  • Search for "[sector] CAGR forecast 2030"
+  • Search for technology performance benchmarks relevant to the company's claims
+  • Search for "[company] litigation" / "bankruptcy" / "lawsuit" if relevant
+Do NOT guess at numbers — search for real data first. Cite what you find.
+
 GRAPH DATA REQUIREMENTS (the "graph_data" field):
-- graph1: Use the company's own revenue projections from the deck. For peers, use 2-3 real public/well-known competitors in the same sector with realistic revenue figures based on your knowledge.
-- graph2: TAM/SAM should reflect real market research figures (IEA, BloombergNEF, Grand View, Mordor Intelligence, etc.).
-- graph3: Identify the SINGLE most important quantifiable performance metric for this company's core technology (e.g. battery energy density Wh/kg, solar efficiency %, EV range miles, carbon capture cost $/ton, wind capacity MW, drug efficacy %, etc.). Find the company's claim for that metric, then list 5-15 real competitor claims/targets for the SAME metric around the same target year. This is for technology forecasting — mapping where the company sits in the competitive distribution.
+- graph1: Use the company's own revenue projections from the deck. For peers, use WEB SEARCH to find 2-3 real public/well-known competitors with actual revenue figures. Cite sources in the "note" field.
+- graph2: TAM/SAM should reflect real market research figures found via WEB SEARCH (IEA, BloombergNEF, Grand View, Mordor Intelligence, etc.). Cite sources in "source_note".
+- graph3: Identify the SINGLE most important quantifiable performance metric for this company's core technology (e.g. battery energy density Wh/kg, solar efficiency %, EV range miles, carbon capture cost $/ton, wind capacity MW, drug efficacy %, etc.). Use WEB SEARCH to find 5-15 real competitor claims/targets for the SAME metric around the same target year. This is for technology forecasting — mapping where the company sits in the competitive distribution.
+
+After completing your web research, return the full JSON and nothing else — no markdown fences, no prose.
 """
 
-        response_text = ""
-        print("   Analysis in progress", end='', flush=True)
+        # Agentic loop — Opus searches the web, then produces final JSON
+        messages = [{"role": "user", "content": prompt}]
+        final_text = ""
+        search_count = 0
+
+        print("   Analysis in progress (web research + report)", end='', flush=True)
 
         try:
-            with self.client.messages.stream(
-                model=MODEL,
-                max_tokens=16000,
-                temperature=0.2,
-                messages=[{"role": "user", "content": prompt}]
-            ) as stream:
-                for i, text in enumerate(stream.text_stream):
-                    response_text += text
-                    if i % 50 == 0:
-                        print(".", end='', flush=True)
+            while True:
+                response = self.client.messages.create(
+                    model=MODEL,
+                    max_tokens=20000,
+                    temperature=0.2,
+                    tools=[self._WEB_SEARCH_TOOL],
+                    messages=messages,
+                )
+
+                # Collect any text from this turn
+                for block in response.content:
+                    if hasattr(block, "text"):
+                        final_text = block.text  # keep the last text block
+
+                # Count web searches for progress reporting
+                tool_calls = [b for b in response.content if b.type == "tool_use"]
+                search_count += len(tool_calls)
+                if tool_calls:
+                    print(f" 🔍×{len(tool_calls)}", end='', flush=True)
+                else:
+                    print(".", end='', flush=True)
+
+                # If Claude is done (no more tool calls), break
+                if response.stop_reason == "end_turn":
+                    break
+
+                # Feed tool results back and continue
+                messages.append({"role": "assistant", "content": response.content})
+                tool_results = []
+                for block in response.content:
+                    if block.type == "tool_use":
+                        tool_results.append({
+                            "type": "tool_result",
+                            "tool_use_id": block.id,
+                            "content": "",  # web_search results are injected by the API
+                        })
+                if tool_results:
+                    messages.append({"role": "user", "content": tool_results})
+                else:
+                    break  # no tool calls but stop_reason wasn't end_turn — exit anyway
+
         except Exception as e:
             print(f"\n❌ API call failed: {e}")
             raise
 
         print()
-        print("   ✓ Analysis complete")
+        print(f"   ✓ Analysis complete ({search_count} web searches performed)")
 
-        json_match = re.search(r'\{[\s\S]*\}', response_text)
+        raw = final_text.strip()
+        # Strip markdown fences if present
+        raw = re.sub(r"^```[a-z]*\n?", "", raw)
+        raw = re.sub(r"\n?```$", "", raw)
+
+        json_match = re.search(r'\{[\s\S]*\}', raw)
         if json_match:
             try:
                 return json.loads(json_match.group())
             except json.JSONDecodeError as e:
-                print(f"   ⚠️  JSON parse error: {e}")
-                return {"company_name": "Unknown", "error": "JSON parse failed", "raw": response_text[:2000]}
+                # Response may have been truncated — try closing open braces
+                print(f"   ⚠️  JSON parse error: {e} — attempting recovery...")
+                fragment = json_match.group()
+                open_b = fragment.count("{") - fragment.count("}")
+                open_a = fragment.count("[") - fragment.count("]")
+                patched = fragment + ("]" * max(open_a, 0)) + ("}" * max(open_b, 0))
+                try:
+                    return json.loads(patched)
+                except json.JSONDecodeError:
+                    print("   ⚠️  Recovery failed — returning partial result")
+                    return {"company_name": "Unknown", "error": "JSON parse failed", "raw": raw[:2000]}
         else:
             return {"company_name": "Unknown", "error": "No JSON found in response"}
 
