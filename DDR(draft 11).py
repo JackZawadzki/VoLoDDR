@@ -43,6 +43,17 @@ except ImportError:
 
 MODEL = "claude-opus-4-6"
 
+
+def _esc(text) -> str:
+    """Escape special ReportLab/XML characters in Claude-generated strings."""
+    if not isinstance(text, str):
+        text = str(text)
+    return (text
+            .replace("&", "&amp;")
+            .replace("<", "&lt;")
+            .replace(">", "&gt;")
+            .replace("$", "&#36;"))
+
 SOURCE_CREDIBILITY = {
     'bloomberg': 0.95, 'reuters': 0.90, 'iea': 0.95, 'bain': 0.85,
     'mckinsey': 0.85, 'bcg': 0.85, 'sec': 0.95, 'crunchbase': 0.85,
@@ -415,7 +426,7 @@ IMPORTANT:
         if overall_status in ['DISTRESSED', 'CRITICAL']:
             story.append(Paragraph(
                 f"<b>⚠️ COMPANY STATUS ALERT: {overall_status}</b><br/>"
-                f"{status_obj.get('notes', '')}",
+                f"{_esc(status_obj.get('notes', ''))}",
                 alert_style
             ))
             story.append(Spacer(1, 0.15*inch))
@@ -475,38 +486,38 @@ IMPORTANT:
         # Flag any specific financial/legal issues inline as brief callouts
         if bank_status not in ['NONE FOUND', 'UNKNOWN', 'ACTIVE'] and bank.get('details'):
             story.append(Paragraph(
-                f"<b>⚠️ Bankruptcy/Insolvency:</b> {bank['details']} "
-                f"— {bank.get('implications', '')}",
+                f"<b>⚠️ Bankruptcy/Insolvency:</b> {_esc(bank['details'])} "
+                f"— {_esc(bank.get('implications', ''))}",
                 alert_style
             ))
         if fund_outcome == 'FAILED' and fund.get('failure_reasons'):
             sought = (fund.get('amount_sought') or 0) / 1e6
             story.append(Paragraph(
-                f"<b>⚠️ Failed Funding Round:</b> Sought ${sought:.1f}M — "
-                f"{fund.get('failure_reasons', 'Reasons not disclosed')}",
+                f"<b>⚠️ Failed Funding Round:</b> Sought &#36;{sought:.1f}M — "
+                f"{_esc(fund.get('failure_reasons', 'Reasons not disclosed'))}",
                 alert_style
             ))
         if ip_status in ['DISPUTED', 'ENCUMBERED'] and ip.get('details'):
             story.append(Paragraph(
-                f"<b>⚠️ IP {ip_status}:</b> {ip.get('details', '')} "
-                f"{('— ' + ip['encumbrances']) if ip.get('encumbrances') else ''}",
+                f"<b>⚠️ IP {ip_status}:</b> {_esc(ip.get('details', ''))} "
+                f"{('— ' + _esc(ip['encumbrances'])) if ip.get('encumbrances') else ''}",
                 alert_style
             ))
         if has_lit:
             lawsuits = lit.get('active_lawsuits', [])
             story.append(Paragraph(
-                f"<b>⚠️ Active Litigation:</b> {'; '.join(lawsuits)}"
-                f"{(' — Debts: ' + lit['outstanding_debts']) if lit.get('outstanding_debts') else ''}",
+                f"<b>⚠️ Active Litigation:</b> {_esc('; '.join(lawsuits))}"
+                f"{(' — Debts: ' + _esc(lit['outstanding_debts'])) if lit.get('outstanding_debts') else ''}",
                 alert_style
             ))
 
         # Company overview
         overview = analysis.get('company_overview', {})
         story.append(Paragraph("COMPANY OVERVIEW", heading_style))
-        story.append(Paragraph(overview.get('description', 'Not available'), body_style))
-        story.append(Paragraph(f"<b>Stage:</b> {overview.get('stage', 'Unknown')}", body_style))
+        story.append(Paragraph(_esc(overview.get('description', 'Not available')), body_style))
+        story.append(Paragraph(f"<b>Stage:</b> {_esc(overview.get('stage', 'Unknown'))}", body_style))
         if status_obj.get('notes') and overall_status not in ['DISTRESSED', 'CRITICAL']:
-            story.append(Paragraph(f"<b>Background:</b> {status_obj['notes']}", body_style))
+            story.append(Paragraph(f"<b>Background:</b> {_esc(status_obj['notes'])}", body_style))
 
         story.append(PageBreak())
 
@@ -517,37 +528,37 @@ IMPORTANT:
             priority = uc.get('priority', 'LOW')
             outcome = uc.get('outcome_if_true') or {}
             mkt_usd = outcome.get('market_opportunity_usd') or 0
-            mkt_str = (f"${mkt_usd/1e9:.1f}B" if mkt_usd >= 1e9
-                       else (f"${mkt_usd/1e6:.0f}M" if mkt_usd > 0 else "Not quantified"))
+            mkt_str = (f"&#36;{mkt_usd/1e9:.1f}B" if mkt_usd >= 1e9
+                       else (f"&#36;{mkt_usd/1e6:.0f}M" if mkt_usd > 0 else "Not quantified"))
             use_style = flag_style if priority in ['MEDIUM', 'LOW'] else alert_style
 
             story.append(Paragraph(
-                f"<b>#{counter} [{priority}] {uc.get('claim', 'Not specified')}</b><br/>"
-                f"<b>Why Unverified:</b> {uc.get('why_unverified', 'No independent verification found')}",
+                f"<b>#{counter} [{priority}] {_esc(uc.get('claim', 'Not specified'))}</b><br/>"
+                f"<b>Why Unverified:</b> {_esc(uc.get('why_unverified', 'No independent verification found'))}",
                 use_style
             ))
             steps = uc.get('investigation_steps', [])
             if steps:
                 story.append(Paragraph(
-                    "<b>Steps to Verify:</b> " + " &nbsp;|&nbsp; ".join(f"({j+1}) {s}" for j, s in enumerate(steps)),
+                    "<b>Steps to Verify:</b> " + " &nbsp;|&nbsp; ".join(f"({j+1}) {_esc(s)}" for j, s in enumerate(steps)),
                     body_style
                 ))
             if outcome:
                 story.append(Paragraph(
-                    f"<b>Outcome If Verified:</b> {outcome.get('description', '')} "
+                    f"<b>Outcome If Verified:</b> {_esc(outcome.get('description', ''))} "
                     f"— Opportunity: <b>{mkt_str}</b>",
                     body_style
                 ))
                 for comp in outcome.get('comparable_companies', []):
                     val = comp.get('comparable_valuation_usd') or 0
-                    val_str = f" — valued at ${val/1e9:.1f}B" if val else ""
-                    share_str = f" | {comp['market_share_potential']}" if comp.get('market_share_potential') else ""
+                    val_str = f" — valued at &#36;{val/1e9:.1f}B" if val else ""
+                    share_str = f" | {_esc(comp['market_share_potential'])}" if comp.get('market_share_potential') else ""
                     story.append(Paragraph(
-                        f"<b>↳ {comp.get('company', 'N/A')}</b>{val_str}: {comp.get('context', '')}{share_str}",
+                        f"<b>↳ {_esc(comp.get('company', 'N/A'))}</b>{val_str}: {_esc(comp.get('context', ''))}{share_str}",
                         verified_style
                     ))
                 if outcome.get('key_caveat'):
-                    story.append(Paragraph(f"<i>Caveat: {outcome['key_caveat']}</i>", body_style))
+                    story.append(Paragraph(f"<i>Caveat: {_esc(outcome['key_caveat'])}</i>", body_style))
             story.append(Spacer(1, 0.2*inch))
 
         def render_claims_table(claims, include_sources=False):
@@ -559,11 +570,11 @@ IMPORTANT:
                              else alert_style)
                 label = '✅' if v_status == 'VERIFIED' else ('⚠️' if v_status == 'PARTIALLY VERIFIED' else '❌')
                 claim_text = (
-                    f"<b>{label} {claim.get('claim', 'Not specified')}</b><br/>"
-                    f"{claim.get('source_label', v_status)}"
+                    f"<b>{label} {_esc(claim.get('claim', 'Not specified'))}</b><br/>"
+                    f"{_esc(claim.get('source_label', v_status))}"
                 )
                 if include_sources and claim.get('sources'):
-                    claim_text += f" — <i>{', '.join(claim['sources'][:2])}</i>"
+                    claim_text += f" — <i>{_esc(', '.join(claim['sources'][:2]))}</i>"
                 story.append(Paragraph(claim_text, use_style))
                 story.append(Spacer(1, 0.08*inch))
 
@@ -571,7 +582,7 @@ IMPORTANT:
         comp_landscape = analysis.get('competitive_landscape', {})
         story.append(Paragraph("COMPETITIVE LANDSCAPE", heading_style))
         story.append(Paragraph(
-            comp_landscape.get('positioning_summary', ''),
+            _esc(comp_landscape.get('positioning_summary', '')),
             body_style
         ))
         story.append(Spacer(1, 0.15*inch))
@@ -582,15 +593,15 @@ IMPORTANT:
             story.append(Paragraph("Peer-Stage Competitors", subheading_style))
             for comp in peer_comps:
                 funding = comp.get('funding_raised_usd') or 0
-                funding_str = f"${funding/1e6:.0f}M raised" if funding else "Funding unknown"
+                funding_str = f"&#36;{funding/1e6:.0f}M raised" if funding else "Funding unknown"
                 peer_text = (
-                    f"<b>{comp.get('name', 'Unknown')}</b> ({comp.get('stage', '?')} — {funding_str})<br/>"
-                    f"{comp.get('description', '')}<br/>"
-                    f"<b>Their edge:</b> {comp.get('their_differentiator', 'N/A')}<br/>"
-                    f"<b>Company's claimed advantage:</b> {comp.get('company_advantage_claimed', 'N/A')}"
+                    f"<b>{_esc(comp.get('name', 'Unknown'))}</b> ({_esc(comp.get('stage', '?'))} — {funding_str})<br/>"
+                    f"{_esc(comp.get('description', ''))}<br/>"
+                    f"<b>Their edge:</b> {_esc(comp.get('their_differentiator', 'N/A'))}<br/>"
+                    f"<b>Company's claimed advantage:</b> {_esc(comp.get('company_advantage_claimed', 'N/A'))}"
                 )
                 if comp.get('sources'):
-                    peer_text += f"<br/><i>Sources: {', '.join(comp['sources'][:2])}</i>"
+                    peer_text += f"<br/><i>Sources: {_esc(', '.join(comp['sources'][:2]))}</i>"
                 story.append(Paragraph(peer_text, body_style))
                 story.append(Spacer(1, 0.12*inch))
 
@@ -600,13 +611,13 @@ IMPORTANT:
             story.append(Paragraph("Market Leaders & Incumbents", subheading_style))
             for leader in leaders:
                 leader_text = (
-                    f"<b>{leader.get('name', 'Unknown')}</b> — {leader.get('market_position', '')}<br/>"
-                    f"{leader.get('valuation_or_revenue', '')}<br/>"
-                    f"{leader.get('description', '')}<br/>"
-                    f"<b>Threat to company:</b> {leader.get('threat_to_company', 'N/A')}"
+                    f"<b>{_esc(leader.get('name', 'Unknown'))}</b> — {_esc(leader.get('market_position', ''))}<br/>"
+                    f"{_esc(leader.get('valuation_or_revenue', ''))}<br/>"
+                    f"{_esc(leader.get('description', ''))}<br/>"
+                    f"<b>Threat to company:</b> {_esc(leader.get('threat_to_company', 'N/A'))}"
                 )
                 if leader.get('sources'):
-                    leader_text += f"<br/><i>Sources: {', '.join(leader['sources'][:2])}</i>"
+                    leader_text += f"<br/><i>Sources: {_esc(', '.join(leader['sources'][:2]))}</i>"
                 story.append(Paragraph(leader_text, body_style))
                 story.append(Spacer(1, 0.12*inch))
 
@@ -703,30 +714,30 @@ IMPORTANT:
         if_all = magnitude.get('if_all_claims_verified', {})
         if if_all:
             story.append(Paragraph("If All Major Claims Are Verified:", subheading_style))
-            story.append(Paragraph(if_all.get('description', 'Not available'), body_style))
-            story.append(Paragraph(if_all.get('framing', ''), body_style))
+            story.append(Paragraph(_esc(if_all.get('description', 'Not available')), body_style))
+            story.append(Paragraph(_esc(if_all.get('framing', '')), body_style))
             mkt = if_all.get('addressable_market_usd') or 0
             share = if_all.get('realistic_market_share_pct') or 0
-            mkt_str_all = f"${mkt/1e9:.1f}B" if mkt > 0 else "Not quantified"
+            mkt_str_all = f"&#36;{mkt/1e9:.1f}B" if mkt > 0 else "Not quantified"
             details_text = (
                 f"<b>Addressable Market:</b> {mkt_str_all}<br/>"
                 f"<b>Realistic Market Share:</b> {share}%<br/>"
             )
             if if_all.get('comparable_companies'):
-                details_text += f"<b>Comparable Companies:</b> {', '.join(if_all['comparable_companies'])}<br/>"
+                details_text += f"<b>Comparable Companies:</b> {_esc(', '.join(if_all['comparable_companies']))}<br/>"
             story.append(Paragraph(details_text, body_style))
             story.append(Spacer(1, 0.2*inch))
 
         if_core = magnitude.get('if_core_tech_only_verified', {})
         if if_core:
             story.append(Paragraph("If Only Core Technology Is Verified:", subheading_style))
-            story.append(Paragraph(if_core.get('description', 'Not available'), body_style))
-            story.append(Paragraph(if_core.get('framing', ''), body_style))
+            story.append(Paragraph(_esc(if_core.get('description', 'Not available')), body_style))
+            story.append(Paragraph(_esc(if_core.get('framing', '')), body_style))
             mkt = if_core.get('addressable_market_usd') or 0
-            mkt_str_core = f"${mkt/1e9:.1f}B" if mkt > 0 else "Not quantified"
+            mkt_str_core = f"&#36;{mkt/1e9:.1f}B" if mkt > 0 else "Not quantified"
             details_text = f"<b>Addressable Market:</b> {mkt_str_core}<br/>"
             if if_core.get('comparable_companies'):
-                details_text += f"<b>Comparable Companies:</b> {', '.join(if_core['comparable_companies'])}<br/>"
+                details_text += f"<b>Comparable Companies:</b> {_esc(', '.join(if_core['comparable_companies']))}<br/>"
             story.append(Paragraph(details_text, body_style))
             story.append(Spacer(1, 0.2*inch))
 
@@ -734,7 +745,7 @@ IMPORTANT:
         if deps:
             story.append(Paragraph("What Must Be Proven First:", subheading_style))
             for dep in deps:
-                story.append(Paragraph(f"• {dep}", body_style))
+                story.append(Paragraph(f"• {_esc(dep)}", body_style))
 
         story.append(Spacer(1, 0.3*inch))
 
