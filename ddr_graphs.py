@@ -10,8 +10,10 @@ or embedded in the PDF report.
 Graphs:
     1. Company revenue projections vs. established peers (timeline)
     2. Global TAM + sub-niche SAM market growth over time
-    3. Monte Carlo simulation — projected 2035 revenue histogram
-       with P10 / P50 / P90 percentile overlays
+    3. Technology Performance Claims Distribution — maps the subject
+       company's key performance claim against a statistical distribution
+       of competitor claims for the same metric, with P10 / P50 / P90
+       percentile overlays showing where the company sits
 
 Usage in ddr_app.py:
     from ddr_graphs import build_graphs
@@ -102,10 +104,28 @@ CHART DATA TO PRODUCE:
    - Use WEB SEARCH to find real market research figures (BloombergNEF, IEA, Grand View,
      Mordor Intelligence, etc.). Cite the source in source_note.
 
-3. MONTE CARLO — 2035 REVENUE
-   - Calibrate the distribution using the company's projections AND verified industry
-     growth benchmarks found via web search.
-   - Higher sigma = more uncertainty (use 0.6-1.0 for early-stage, 0.4-0.6 for later).
+3. TECHNOLOGY PERFORMANCE CLAIMS DISTRIBUTION
+   This chart maps the subject company's key performance claim against the full
+   competitive landscape. The goal is technology forecasting — answering:
+   "Is their claim credible relative to what everyone else is targeting?"
+
+   Steps:
+   a) Identify the SINGLE most important, quantifiable performance metric for this
+      company's technology (examples: EV range in miles, solar cell efficiency %,
+      battery energy density Wh/kg, carbon capture cost $/ton, wind turbine capacity MW,
+      drug efficacy rate %, chip transistor density, data throughput Gbps, etc.).
+   b) Find the subject company's specific claim/target for that metric and the
+      year they claim to achieve it (the "target_year").
+   c) Use WEB SEARCH extensively (at least 4-6 searches) to find as many competitor
+      and industry claims/targets for the SAME metric around the SAME target year as
+      possible. Search for "[metric] targets 2030", "[sector] performance benchmarks",
+      "[competitor] [metric] roadmap", etc. You need at least 5 competitor data points,
+      ideally 8-15+.
+   d) Return ALL the raw data points so we can build the distribution.
+
+   IMPORTANT: The metric should be whatever is most relevant to the company's core
+   value proposition — it could be efficiency, cost, range, speed, density, yield,
+   or any other measurable performance claim. Pick the ONE metric that matters most.
 
 Return this exact JSON structure:
 {
@@ -137,11 +157,21 @@ Return this exact JSON structure:
     "source_note": "Source: [actual sources found via search, e.g. BloombergNEF 2024]"
   },
   "graph3": {
-    "mean_2035_usd_m": 800,
-    "lognorm_mu": 6.5,
-    "lognorm_sigma": 0.7,
-    "n_simulations": 50000,
-    "rationale": "Distribution calibrated using [sources found via search]"
+    "metric_name": "EV Range",
+    "metric_unit": "miles",
+    "target_year": 2030,
+    "company_claim": 500,
+    "competitor_claims": [
+      {"name": "Honda", "value": 400, "source": "Honda EV roadmap 2024"},
+      {"name": "Toyota", "value": 450, "source": "Toyota bZ press release"},
+      {"name": "Tesla", "value": 520, "source": "Tesla investor day 2024"},
+      {"name": "BMW", "value": 435, "source": "BMW Neue Klasse announcement"},
+      {"name": "BYD", "value": 470, "source": "BYD Blade battery roadmap"}
+    ],
+    "higher_is_better": true,
+    "current_best_in_class": 350,
+    "current_best_source": "EPA ratings 2024",
+    "rationale": "Metric chosen because range is the primary differentiator..."
   }
 }
 
@@ -307,79 +337,139 @@ def _graph2(data: dict) -> plt.Figure:
     return fig
 
 
-# ── Graph 3: Monte Carlo histogram — projected 2035 revenue ──────────────────
+# ── Graph 3: Technology Performance Claims Distribution ──────────────────────
 
 def _graph3(data: dict) -> plt.Figure:
     g = data["graph3"]
-    company    = data["company_name"]
-    mu         = g["lognorm_mu"]
-    sigma      = g["lognorm_sigma"]
-    n          = g.get("n_simulations", 50_000)
-    rationale  = g.get("rationale", "")
+    company      = data["company_name"]
+    metric_name  = g["metric_name"]
+    metric_unit  = g["metric_unit"]
+    target_year  = g.get("target_year", "")
+    company_val  = g["company_claim"]
+    competitors  = g["competitor_claims"]
+    higher_better = g.get("higher_is_better", True)
+    current_best  = g.get("current_best_in_class")
+    current_src   = g.get("current_best_source", "")
+    rationale     = g.get("rationale", "")
 
-    rng = np.random.default_rng(42)
-    samples = rng.lognormal(mean=mu, sigma=sigma, size=n)
+    # Collect all competitor values
+    comp_values = [c["value"] for c in competitors]
+    comp_names  = [c["name"] for c in competitors]
+    all_values  = comp_values + [company_val]
 
-    p10 = np.percentile(samples, 10)
-    p50 = np.percentile(samples, 50)
-    p90 = np.percentile(samples, 90)
+    # Build a kernel density estimate from competitor claims for the distribution curve
+    from scipy.stats import gaussian_kde
 
-    fig, ax = plt.subplots(figsize=(9, 5.5))
+    # Fit KDE on competitor claims only (the "landscape")
+    if len(comp_values) >= 2:
+        kde = gaussian_kde(comp_values, bw_method="silverman")
+        x_pad = (max(all_values) - min(all_values)) * 0.3
+        x_lo = min(all_values) - x_pad
+        x_hi = max(all_values) + x_pad
+        x_range = np.linspace(x_lo, x_hi, 500)
+        density = kde(x_range)
+    else:
+        x_range = np.array([])
+        density = np.array([])
+
+    # Compute percentiles of the competitor landscape
+    p10 = np.percentile(comp_values, 10)
+    p50 = np.percentile(comp_values, 50)
+    p90 = np.percentile(comp_values, 90)
+
+    fig, ax = plt.subplots(figsize=(10, 6))
     fig.patch.set_facecolor("white")
     ax.set_facecolor(VOLO_PALE)
 
-    # Clip display range to P2–P98 so extreme outliers don't flatten the chart
-    lo, hi = np.percentile(samples, 2), np.percentile(samples, 98)
-    clipped = samples[(samples >= lo) & (samples <= hi)]
+    # Plot distribution curve
+    if len(x_range) > 0:
+        ax.fill_between(x_range, density, alpha=0.18, color=ACCENT_BLUE)
+        ax.plot(x_range, density, color=ACCENT_BLUE, linewidth=2, alpha=0.7)
 
-    ax.hist(clipped, bins=80, color=VOLO_LIGHT, edgecolor="white",
-            linewidth=0.4, alpha=0.85, density=True)
+    # Plot individual competitor claims as a strip / rug + labeled markers
+    y_rug = -0.02 * max(density) if len(density) > 0 else -0.01
+    comp_colors = ["#5b7ea8"] * len(competitors)
 
-    # Percentile lines
+    for i, c in enumerate(competitors):
+        ax.plot(c["value"], 0, marker="D", markersize=7, color="#5b7ea8",
+                zorder=8, markeredgecolor="white", markeredgewidth=0.8)
+        # Stagger labels to reduce overlap
+        y_offset = -0.06 * (max(density) if len(density) > 0 else 1) * (1 + (i % 3) * 0.7)
+        ax.annotate(
+            c["name"],
+            xy=(c["value"], 0), xytext=(c["value"], y_offset),
+            fontsize=7, color="#5b7ea8", ha="center", va="top",
+            fontweight="bold",
+            arrowprops=dict(arrowstyle="-", color="#5b7ea8", lw=0.5),
+        )
+
+    # Percentile lines on the competitor distribution
+    y_top = max(density) if len(density) > 0 else 1
     line_cfg = [
-        (p10, "#c0392b", "P10 — Conservative"),
-        (p50, VOLO_GREEN, "P50 — Median"),
-        (p90, ACCENT_ORANGE, "P90 — Optimistic"),
+        (p10, "#c0392b", "P10"),
+        (p50, VOLO_GREEN, "P50"),
+        (p90, ACCENT_ORANGE, "P90"),
     ]
-    y_top = ax.get_ylim()[1]
-
     for val, color, label in line_cfg:
-        ax.axvline(val, color=color, linewidth=2.2, linestyle="--", zorder=6)
-
-        # Dollar label above line
-        if val >= 1_000:
-            val_str = f"${val/1_000:.1f}B"
-        else:
-            val_str = f"${val:.0f}M"
-
-        ax.text(val, y_top * 0.97, f"{label.split('—')[0].strip()}\n{val_str}",
-                ha="center", va="top", fontsize=8.5, color=color,
+        ax.axvline(val, color=color, linewidth=1.8, linestyle="--", alpha=0.7, zorder=5)
+        ax.text(val, y_top * 1.02, f"{label}\n{val:.4g} {metric_unit}",
+                ha="center", va="bottom", fontsize=7.5, color=color,
                 fontweight="bold",
-                bbox=dict(boxstyle="round,pad=0.3", facecolor="white",
-                          edgecolor=color, alpha=0.9))
+                bbox=dict(boxstyle="round,pad=0.25", facecolor="white",
+                          edgecolor=color, alpha=0.85))
+
+    # Company claim — bold highlighted marker
+    ax.axvline(company_val, color=VOLO_GREEN, linewidth=2.8, linestyle="-", zorder=9)
+    # Place company label at top of chart
+    ax.text(company_val, y_top * 1.14,
+            f"{company}\n{company_val:.4g} {metric_unit}",
+            ha="center", va="bottom", fontsize=9.5, color=VOLO_GREEN,
+            fontweight="bold",
+            bbox=dict(boxstyle="round,pad=0.35", facecolor="white",
+                      edgecolor=VOLO_GREEN, linewidth=2, alpha=0.95))
+
+    # Current best-in-class marker if provided
+    if current_best is not None:
+        ax.axvline(current_best, color="#888888", linewidth=1.5, linestyle=":",
+                   zorder=4, alpha=0.7)
+        ax.text(current_best, y_top * 0.85,
+                f"Current Best\n{current_best:.4g} {metric_unit}",
+                ha="center", va="top", fontsize=7, color="#666666",
+                fontweight="bold",
+                bbox=dict(boxstyle="round,pad=0.25", facecolor="#f5f5f5",
+                          edgecolor="#bbbbbb", alpha=0.85))
+
+    year_str = f" (Target ~{target_year})" if target_year else ""
+    direction = "→ Higher = Better" if higher_better else "→ Lower = Better"
 
     _apply_base_style(
         ax,
-        title=f"{company} — Monte Carlo: Projected 2035 Revenue",
-        xlabel="Revenue (USD)",
-        ylabel="Probability Density"
+        title=f"{company} — Technology Claims vs. Competitive Landscape{year_str}",
+        xlabel=f"{metric_name} ({metric_unit})  {direction}",
+        ylabel="Density of Competitor Claims"
     )
 
-    # Format x-axis dynamically
-    def _rev_fmt(x, _):
-        if x >= 1_000:
-            return f"${x/1_000:.1f}B"
-        return f"${x:.0f}M"
+    # Hide y-axis ticks (density values aren't meaningful to the reader)
+    ax.set_yticks([])
+    ax.set_ylabel("")
 
-    ax.xaxis.set_major_formatter(mticker.FuncFormatter(_rev_fmt))
-    ax.tick_params(axis="x", rotation=20)
+    # Extend y-axis to make room for labels
+    ax.set_ylim(bottom=-0.25 * y_top, top=y_top * 1.35)
 
-    # Caption box
+    ax.tick_params(axis="x", rotation=0)
+
+    # Caption
+    n_comps = len(competitors)
     caption = (
-        f"Based on {n:,} Monte Carlo simulations. "
-        f"P10 = conservative outcome, P50 = median (most likely), P90 = optimistic outcome.\n"
-        + (f"{rationale}" if rationale else "")
+        f"Distribution built from {n_comps} competitor performance claims/targets "
+        f"for {metric_name.lower()} ({metric_unit}). "
+        f"P10/P50/P90 reflect the competitive landscape spread.\n"
     )
+    if current_best and current_src:
+        caption += f"Current best-in-class: {current_best:.4g} {metric_unit} ({current_src}). "
+    if rationale:
+        caption += rationale
+
     fig.text(0.5, -0.06, caption, ha="center", fontsize=7.8,
              color=TEXT_MID, style="italic", wrap=True)
 
@@ -397,14 +487,14 @@ def figures_to_pdf(figs: list, output_path: str, company_name: str):
     titles = [
         "Revenue Trajectory vs. Established Peers",
         "Global TAM & Sub-Niche SAM Growth Over Time",
-        "Monte Carlo Simulation — Projected 2035 Revenue",
+        "Technology Performance Claims vs. Competitive Landscape",
     ]
     captions = [
         "Company's own revenue projections (dashed) plotted against real, publicly known peers in the same sector.\n"
         "Dashed line reflects unverified company claims.",
         "Global addressable market (TAM) and the company's serviceable sub-niche (SAM) based on independent industry research.",
-        "50,000-run Monte Carlo simulation of projected 2035 revenue.\n"
-        "P10 = conservative, P50 = median, P90 = optimistic probabilistic outcomes.",
+        "Statistical distribution of competitor performance claims for the company's key technology metric.\n"
+        "P10/P50/P90 reflect the competitive landscape. Company's claim shown as solid green line.",
     ]
 
     with PdfPages(output_path) as pdf:
