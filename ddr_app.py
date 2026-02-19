@@ -26,8 +26,11 @@ import importlib.util
 from pathlib import Path
 from datetime import datetime
 
+import io
+
 import streamlit as st
 from anthropic import Anthropic
+from pypdf import PdfWriter, PdfReader
 from ddr_graphs import build_graphs, figures_to_pdf
 
 # ── Load the analyzer from the existing DDR file ─────────────────────────────
@@ -345,36 +348,39 @@ if run_button and uploaded_file:
     finally:
         os.unlink(tmp_path)
 
-    # ── Download ──────────────────────────────────────────────────────────────
+    # ── Merge both PDFs into one ──────────────────────────────────────────────
+    merger = PdfWriter()
+    for path in (output_path, graphs_path):
+        merger.append(PdfReader(path))
+    merged_buf = io.BytesIO()
+    merger.write(merged_buf)
+    merged_bytes = merged_buf.getvalue()
+
+    merged_filename = f"{safe_name}_DDR_Full_{timestamp}.pdf"
+
+    st.session_state["merged_bytes"] = merged_bytes
+    st.session_state["merged_filename"] = merged_filename
+    st.session_state["company_name"] = company_name
+    st.session_state["generated_at"] = datetime.now().strftime('%B %d, %Y at %H:%M')
+
+# ── Download section (rendered from session state, survives reruns) ────────────
+if "merged_bytes" in st.session_state:
     st.write("")
-    st.success(f"✅ Due diligence report ready — {company_name}")
-    with open(output_path, "rb") as f:
-        pdf_bytes = f.read()
+    st.success(f"✅ Due diligence report ready — {st.session_state['company_name']}")
 
     st.download_button(
-        label="⬇️  Download Due Diligence Report (PDF)",
-        data=pdf_bytes,
-        file_name=output_filename,
+        label="⬇️  Download Full Report + Charts (PDF)",
+        data=st.session_state["merged_bytes"],
+        file_name=st.session_state["merged_filename"],
         mime="application/pdf",
         use_container_width=True,
+        key="dl_full",
     )
 
     st.caption(
-        f"Generated {datetime.now().strftime('%B %d, %Y at %H:%M')} · "
+        f"Generated {st.session_state['generated_at']} · "
+        "Includes due diligence report and analysis charts · "
         "No investment recommendation is made by this tool."
-    )
-
-    # ── Charts PDF download ───────────────────────────────────────────────────
-    st.write("")
-    with open(graphs_path, "rb") as f:
-        graphs_bytes = f.read()
-
-    st.download_button(
-        label="📈  Download Analysis Charts (PDF)",
-        data=graphs_bytes,
-        file_name=graphs_filename,
-        mime="application/pdf",
-        use_container_width=True,
     )
 
 # ── Footer ────────────────────────────────────────────────────────────────────
