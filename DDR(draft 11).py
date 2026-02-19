@@ -650,7 +650,7 @@ After completing your web research, return the full JSON and nothing else — no
             ))
         if ip_status in ['DISPUTED', 'ENCUMBERED'] and ip.get('details'):
             story.append(Paragraph(
-                f"<b>⚠️ IP {ip_status}:</b> {_esc(ip.get('details', ''))} "
+                f"<b>⚠️ IP {_esc(ip_status)}:</b> {_esc(ip.get('details', ''))} "
                 f"{('— ' + _esc(ip['encumbrances'])) if ip.get('encumbrances') else ''}",
                 alert_style
             ))
@@ -945,7 +945,7 @@ After completing your web research, return the full JSON and nothing else — no
 
         story.append(Spacer(1, 0.3*inch))
         method_text = (
-            f"<i><b>Methodology:</b> Analysis based on {analysis.get('sources_consulted', '?')} sources "
+            f"<i><b>Methodology:</b> Analysis based on {_esc(str(analysis.get('sources_consulted', '?')))} sources "
             f"including court records, financial databases, and industry reports. Confidence scores reflect "
             f"source quality, recency, and corroboration. No investment recommendation is made.</i><br/><br/>"
             f"<b>Report Generated:</b> {datetime.now().strftime('%B %d, %Y at %H:%M:%S')}"
