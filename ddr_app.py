@@ -27,6 +27,8 @@ from pathlib import Path
 from datetime import datetime
 
 import streamlit as st
+from anthropic import Anthropic
+from ddr_graphs import build_graphs, figures_to_pdf
 
 # ── Load the analyzer from the existing DDR file ─────────────────────────────
 _ddr_path = Path(__file__).parent / "DDR(draft 11).py"
@@ -227,6 +229,7 @@ st.markdown("""
         <span class="step-pill">🔬 Analyze</span>
         <span class="step-pill">📊 Score</span>
         <span class="step-pill">📑 Generate PDF</span>
+        <span class="step-pill">📈 Charts</span>
     </div>
 </div>
 """, unsafe_allow_html=True)
@@ -322,6 +325,17 @@ if run_button and uploaded_file:
             analyzer.generate_pdf(scored, output_path)
             status.update(label="📑 PDF report generated", state="complete")
 
+        # ── Step 5: Generate graphs ───────────────────────────────────────────
+        with st.status("📈 Generating analysis charts...", expanded=True) as status:
+            st.write("Building projections, market growth, and Monte Carlo charts...")
+            graph_client = Anthropic(api_key=api_key)
+            figs = build_graphs(scored, graph_client)
+
+            graphs_filename = f"{safe_name}_Charts_{timestamp}.pdf"
+            graphs_path = os.path.join(tempfile.gettempdir(), graphs_filename)
+            figures_to_pdf(figs, graphs_path, company_name)
+            status.update(label="📈 Charts ready", state="complete")
+
     except FileNotFoundError as e:
         st.error(f"File error: {e}")
         st.stop()
@@ -348,6 +362,19 @@ if run_button and uploaded_file:
     st.caption(
         f"Generated {datetime.now().strftime('%B %d, %Y at %H:%M')} · "
         "No investment recommendation is made by this tool."
+    )
+
+    # ── Charts PDF download ───────────────────────────────────────────────────
+    st.write("")
+    with open(graphs_path, "rb") as f:
+        graphs_bytes = f.read()
+
+    st.download_button(
+        label="📈  Download Analysis Charts (PDF)",
+        data=graphs_bytes,
+        file_name=graphs_filename,
+        mime="application/pdf",
+        use_container_width=True,
     )
 
 # ── Footer ────────────────────────────────────────────────────────────────────
