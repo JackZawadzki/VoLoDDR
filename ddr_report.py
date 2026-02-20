@@ -248,7 +248,6 @@ def generate_report_pdf(analysis: dict, output_path: str):
         ['Bankruptcy / insolvency', bank_status],
         ['Recent funding', fund_outcome],
         ['IP ownership', ip_status],
-        ['Active litigation', 'YES' if has_lit else 'NONE FOUND'],
     ]
 
     def _snapshot_table(data):
@@ -307,9 +306,8 @@ def generate_report_pdf(analysis: dict, output_path: str):
         mkt_str = _dollar(mkt_usd)
         use_style = S["flag"] if priority in ['MEDIUM', 'LOW'] else S["alert"]
 
-        stars = uc.get('ai_confidence_stars', '')
         score = uc.get('ai_confidence_score')
-        conf_str = f" &nbsp;| &nbsp;AI Confidence: {stars} ({score:.0%})" if score is not None else ""
+        conf_str = f" &nbsp;| &nbsp;Confidence: {score:.0%}" if score is not None else ""
 
         story.append(_p(
             f"<b>#{counter} [{priority}] {uc.get('claim', 'Not specified')}</b>{conf_str}<br/>"
@@ -351,9 +349,8 @@ def generate_report_pdf(analysis: dict, output_path: str):
             label = ('✅' if v_status == 'VERIFIED'
                      else '⚠️' if v_status == 'PARTIALLY VERIFIED'
                      else '❌')
-            stars = claim.get('ai_confidence_stars', '')
             score = claim.get('ai_confidence_score')
-            conf_str = f" &nbsp;| &nbsp;AI Confidence: {stars} ({score:.0%})" if score is not None else ""
+            conf_str = f" &nbsp;| &nbsp;Confidence: {score:.0%}" if score is not None else ""
 
             text = (
                 f"<b>{label} {claim.get('claim', 'Not specified')}</b>{conf_str}<br/>"
@@ -375,8 +372,7 @@ def generate_report_pdf(analysis: dict, output_path: str):
         funding = comp.get('funding_raised_usd') or 0
         funding_str = _dollar(funding) + " raised" if funding else "Funding unknown"
         score = comp.get('ai_confidence_score')
-        stars = comp.get('ai_confidence_stars', '')
-        conf_tag = f" &nbsp;| &nbsp;{stars} ({score:.0%})" if score is not None else ""
+        conf_tag = f" &nbsp;| &nbsp;Confidence: {score:.0%}" if score is not None else ""
         if comp_landscape.get('peer_competitors', []).index(comp) == 0:
             story.append(_p("Peer-Stage Competitors", S["subheading"]))
         story.append(_p(
@@ -396,8 +392,7 @@ def generate_report_pdf(analysis: dict, output_path: str):
         story.append(_p("Market Leaders &amp; Incumbents", S["subheading"]))
         for leader in leaders:
             score = leader.get('ai_confidence_score')
-            stars = leader.get('ai_confidence_stars', '')
-            conf_tag = f" &nbsp;| &nbsp;{stars} ({score:.0%})" if score is not None else ""
+            conf_tag = f" &nbsp;| &nbsp;Confidence: {score:.0%}" if score is not None else ""
             story.append(_p(
                 f"<b>{leader.get('name', 'Unknown')}</b> — "
                 f"{leader.get('market_position', '')}{conf_tag}<br/>"
@@ -573,14 +568,21 @@ def generate_report_pdf(analysis: dict, output_path: str):
         S["body"],
     ))
 
-    # ── SOURCES PAGE ─────────────────────────────────────────────────────
+    # ── SOURCES PAGE (compact — fits on one page) ─────────────────────────
     story.append(PageBreak())
     story.append(_p("SOURCES", S["heading"]))
-    story.append(_p(
-        "<i>All sources referenced in this report, grouped by the section that cited them.</i>",
-        S["body"],
-    ))
-    story.append(Spacer(1, 0.15 * inch))
+
+    # Compact styles for dense source listing
+    src_heading = ParagraphStyle(
+        'SrcHeading', parent=S["body"],
+        fontSize=9, leading=12, spaceAfter=2, spaceBefore=6,
+        fontName='Helvetica-Bold', textColor=colors.HexColor('#2d5f3f'),
+    )
+    src_item = ParagraphStyle(
+        'SrcItem', parent=S["body"],
+        fontSize=8, leading=10, spaceAfter=1, spaceBefore=0,
+        textColor=colors.HexColor('#333333'),
+    )
 
     section_sources = {}
 
@@ -631,18 +633,17 @@ def generate_report_pdf(analysis: dict, output_path: str):
                     unique.append(s)
                     total_unique.add(key)
 
-            story.append(_p(f"<b>{section_label}</b>", S["subheading"]))
-            for s in unique:
-                story.append(_p(f"• {s}", S["body"]))
-            story.append(Spacer(1, 0.1 * inch))
+            # Section label + all sources as a single comma-separated line
+            sources_line = " · ".join(unique)
+            story.append(_p(f"<b>{section_label}:</b> {sources_line}", src_heading))
 
-        story.append(Spacer(1, 0.15 * inch))
+        story.append(Spacer(1, 0.1 * inch))
         story.append(_p(
             f"<b>Total unique sources cited:</b> {len(total_unique)}",
-            S["body"],
+            src_item,
         ))
     else:
-        story.append(_p("No structured source data available.", S["body"]))
+        story.append(_p("No structured source data available.", src_item))
 
     doc.build(story)
 
