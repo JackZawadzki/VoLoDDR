@@ -16,10 +16,11 @@ All Opus API calls go through one shared _agentic_call() function.
 import os
 import json
 import re
+import time
 from typing import Dict
 
 from pypdf import PdfReader
-from anthropic import Anthropic
+from anthropic import Anthropic, RateLimitError
 
 try:
     from dotenv import load_dotenv
@@ -97,13 +98,22 @@ def _agentic_call(client: Anthropic, prompt: str,
     final_text = ""
 
     while True:
-        response = client.messages.create(
-            model=MODEL,
-            max_tokens=max_tokens,
-            temperature=temperature,
-            tools=[WEB_SEARCH_TOOL],
-            messages=messages,
-        )
+        # Retry on rate limit — wait silently and try again (up to 5 times)
+        for attempt in range(5):
+            try:
+                response = client.messages.create(
+                    model=MODEL,
+                    max_tokens=max_tokens,
+                    temperature=temperature,
+                    tools=[WEB_SEARCH_TOOL],
+                    messages=messages,
+                )
+                break  # success
+            except RateLimitError:
+                if attempt < 4:
+                    time.sleep(60)
+                else:
+                    raise  # give up after 5 attempts
 
         # Collect the last text block
         for block in response.content:
