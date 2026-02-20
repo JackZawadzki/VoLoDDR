@@ -198,24 +198,10 @@ def generate_report_pdf(analysis: dict, output_path: str):
     ))
     story.append(Spacer(1, 0.2 * inch))
 
-    # Pull status data early
+    # Pull status data
     status_obj = analysis.get('company_financial_legal_status', {})
     overall_status = status_obj.get('overall_status', 'UNKNOWN')
-
-    if overall_status in ['DISTRESSED', 'CRITICAL']:
-        story.append(_p(
-            f"<b>⚠️ COMPANY STATUS ALERT: {overall_status}</b><br/>"
-            f"{status_obj.get('notes', '')}",
-            S["alert"],
-        ))
-        story.append(Spacer(1, 0.15 * inch))
-
-    # Snapshot tables
     unverified = analysis.get('unverified_claims', [])
-    priority_counts = {'CRITICAL': 0, 'HIGH': 0, 'MEDIUM': 0, 'LOW': 0}
-    for c in unverified:
-        p = c.get('priority', 'LOW')
-        priority_counts[p] = priority_counts.get(p, 0) + 1
 
     bank = status_obj.get('bankruptcy_insolvency', {})
     fund = status_obj.get('recent_funding', {})
@@ -227,42 +213,7 @@ def generate_report_pdf(analysis: dict, output_path: str):
     ip_status = ip.get('status', 'UNKNOWN')
     has_lit = bool(lit.get('active_lawsuits') or lit.get('outstanding_debts'))
 
-    left_data = [
-        ['UNVERIFIED CLAIMS', ''],
-        ['Critical', str(priority_counts['CRITICAL'])],
-        ['High', str(priority_counts['HIGH'])],
-        ['Medium', str(priority_counts['MEDIUM'])],
-        ['Low', str(priority_counts['LOW'])],
-        ['Total', str(len(unverified))],
-        ['Sources consulted', str(analysis.get('sources_consulted', '?'))],
-    ]
-    right_data = [
-        ['FINANCIAL & LEGAL SNAPSHOT', ''],
-        ['Company status', overall_status],
-        ['Bankruptcy / insolvency', bank_status],
-        ['Recent funding', fund_outcome],
-        ['IP ownership', ip_status],
-    ]
-
-    def _snapshot_table(data):
-        t = Table(data, colWidths=[3.5 * inch, 2.5 * inch])
-        t.setStyle(TableStyle([
-            ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#2d5f3f')),
-            ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
-            ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
-            ('FONTSIZE', (0, 0), (-1, -1), 10),
-            ('GRID', (0, 0), (-1, -1), 0.5, colors.HexColor('#cccccc')),
-            ('ROWBACKGROUNDS', (0, 1), (-1, -1),
-             [colors.white, colors.HexColor('#f5f5f5')]),
-        ]))
-        return t
-
-    story.append(_snapshot_table(left_data))
-    story.append(Spacer(1, 0.15 * inch))
-    story.append(_snapshot_table(right_data))
-    story.append(Spacer(1, 0.25 * inch))
-
-    # Company overview
+    # Company overview first
     overview = analysis.get('company_overview', {})
     story.append(_p("COMPANY OVERVIEW", S["heading"]))
     story.append(_p(overview.get('description', 'Not available'), S["body"]))
@@ -270,7 +221,16 @@ def generate_report_pdf(analysis: dict, output_path: str):
     if status_obj.get('notes') and overall_status not in ['DISTRESSED', 'CRITICAL']:
         story.append(_p(f"<b>Background:</b> {status_obj['notes']}", S["body"]))
 
-    # Weave any financial/legal flags into the overview as a brief note
+    # Status alert after overview (only if something is actually wrong)
+    if overall_status in ['DISTRESSED', 'CRITICAL']:
+        story.append(Spacer(1, 0.1 * inch))
+        story.append(_p(
+            f"<b>Company Status: {overall_status}</b> — "
+            f"{status_obj.get('notes', '')}",
+            S["alert"],
+        ))
+
+    # Financial/legal flags woven in after overview
     flags = []
     if bank_status not in ['NONE FOUND', 'UNKNOWN', 'ACTIVE'] and bank.get('details'):
         flags.append(f"Bankruptcy/Insolvency ({bank_status}): {bank['details']}")
@@ -284,8 +244,8 @@ def generate_report_pdf(analysis: dict, output_path: str):
         flags.append(f"Active litigation: {'; '.join(lawsuits)}")
     if flags:
         story.append(_p(
-            "<b>⚠️ Key Legal/Financial Flags:</b> " + " | ".join(flags),
-            S["alert"],
+            "<b>Key Legal/Financial Flags:</b> " + " | ".join(flags),
+            S["body"],
         ))
 
     story.append(PageBreak())
