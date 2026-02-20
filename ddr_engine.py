@@ -7,7 +7,7 @@ Handles:
   - PDF text extraction
   - Agentic Claude Opus + web_search analysis
   - JSON parsing with recovery
-  - Confidence scoring
+  - AI self-assessed confidence display enrichment
   - Graph data fallback extraction (graph1 + graph2)
   - Dedicated technology benchmark research (graph3)
 
@@ -18,7 +18,7 @@ import os
 import json
 import re
 import time
-from typing import Dict
+from typing import Dict  # noqa: F401 — kept for potential future use
 
 from pypdf import PdfReader
 from anthropic import Anthropic, RateLimitError
@@ -36,31 +36,6 @@ MODEL = "claude-opus-4-6"
 WEB_SEARCH_TOOL = {
     "type": "web_search_20250305",
     "name": "web_search",
-}
-
-SOURCE_CREDIBILITY = {
-    # Tier 1 — official filings, government, top-tier data providers
-    'bloomberg': 0.95, 'bloombergnef': 0.95, 'reuters': 0.90,
-    'iea': 0.95, 'sec': 0.95, 'court_records': 0.95, 'annual report': 0.90,
-    'sec.gov': 0.95, 'epa': 0.90, 'doe': 0.90, 'nrel': 0.90,
-    'world bank': 0.90, 'imf': 0.90, 'eurostat': 0.90,
-    # Tier 2 — reputable research / consulting / data platforms
-    'pitchbook': 0.90, 'bain': 0.85, 'mckinsey': 0.85, 'bcg': 0.85,
-    'deloitte': 0.85, 'kpmg': 0.85, 'pwc': 0.85, 'ey': 0.85,
-    'crunchbase': 0.85, 'cbinsights': 0.85, 'cb insights': 0.85,
-    'grand view': 0.80, 'mordor intelligence': 0.80, 'marketsandmarkets': 0.80,
-    'statista': 0.80, 'ibisworld': 0.80, 'frost & sullivan': 0.80,
-    'government': 0.85, 'industry_report': 0.75,
-    # Tier 3 — tech/business press
-    'techcrunch': 0.75, 'wsj': 0.85, 'wall street journal': 0.85,
-    'financial times': 0.85, 'ft.com': 0.85, 'cnbc': 0.75,
-    'fortune': 0.75, 'forbes': 0.70, 'wired': 0.70, 'mit technology': 0.80,
-    'nature': 0.90, 'science': 0.90, 'arxiv': 0.75,
-    # Tier 4 — company press releases / general news
-    'press release': 0.50, 'company website': 0.45, 'linkedin': 0.40,
-    'wikipedia': 0.55, 'blog': 0.35,
-    # Default
-    'unknown': 0.20,
 }
 
 
@@ -192,43 +167,7 @@ def _extract_json(raw_text: str) -> dict:
                 "raw": raw_text[:2000]}
 
 
-# ── Confidence Scoring ───────────────────────────────────────────────────────
-
-def _get_credibility(source: str) -> float:
-    """Look up source credibility via substring match."""
-    source_lower = source.lower()
-    for key, score in SOURCE_CREDIBILITY.items():
-        if key in source_lower:
-            return score
-    return SOURCE_CREDIBILITY['unknown']
-
-
-def score_claim(sources: list, data_age_months: int = 999,
-                sources_agree: bool = False, has_numbers: bool = False) -> float:
-    """Calculate AI confidence score for a claim (0.0 – 1.0).
-
-    Scoring targets an average of ~85-90% across a typical report.
-    - 0 sources (unverified claims): ~78%
-    - 1 source:  ~88%
-    - 2 sources: ~92%
-    - 3+ sources with good credibility: ~95-100%
-    """
-    confidence = 0.78
-    if len(sources) >= 5:    confidence += 0.12
-    elif len(sources) >= 3:  confidence += 0.10
-    elif len(sources) == 2:  confidence += 0.08
-    elif len(sources) == 1:  confidence += 0.05
-
-    if sources:
-        avg_cred = sum(_get_credibility(s) for s in sources) / len(sources)
-        confidence += avg_cred * 0.10
-
-    if data_age_months <= 6:     confidence += 0.04
-    elif data_age_months <= 12:  confidence += 0.02
-    if sources_agree:            confidence += 0.03
-    if has_numbers:              confidence += 0.02
-    return min(1.0, confidence)
-
+# ── AI Confidence Display ────────────────────────────────────────────────────
 
 def get_stars(confidence: float) -> str:
     """Convert confidence score to star rating string."""
@@ -239,39 +178,43 @@ def get_stars(confidence: float) -> str:
     else: return '\u2b50'
 
 
-def add_confidence_scores(analysis: dict) -> dict:
-    """Walk the analysis dict and add confidence scores to every claim."""
+def add_confidence_display(analysis: dict) -> dict:
+    """Walk the analysis and add display-friendly confidence strings.
 
-    def _score_items(items, has_numbers=False):
+    The AI assigns ai_confidence scores (0.0-1.0) during analysis — these
+    reflect how confident the AI is in its OWN analytical conclusions, not
+    confidence in the company's claims.  This function simply reads those
+    scores and adds star-rating strings for PDF display.
+    """
+
+    def _enrich(items):
         for item in items:
-            conf = score_claim(
-                sources=item.get('sources', []),
-                has_numbers=has_numbers,
-            )
-            item['ai_confidence_score'] = conf
-            item['ai_confidence_stars'] = get_stars(conf)
+            conf = item.get('ai_confidence')
+            if conf is not None:
+                item['ai_confidence_score'] = conf
+                item['ai_confidence_stars'] = get_stars(conf)
 
-    _score_items(analysis.get('technology_claims', []))
-    _score_items(analysis.get('market_claims', []), has_numbers=True)
-
-    for claim in analysis.get('unverified_claims', []):
-        conf = score_claim(
-            sources=[],
-            has_numbers=bool(claim.get('outcome_if_true', {}).get('market_opportunity_usd')),
-        )
-        claim['ai_confidence_score'] = conf
-        claim['ai_confidence_stars'] = get_stars(conf)
+    _enrich(analysis.get('technology_claims', []))
+    _enrich(analysis.get('market_claims', []))
+    _enrich(analysis.get('unverified_claims', []))
 
     status = analysis.get('company_financial_legal_status', {})
-    if 'bankruptcy_insolvency' in status:
-        bank = status['bankruptcy_insolvency']
-        conf = score_claim(sources=bank.get('sources', []), has_numbers=True)
-        bank['ai_confidence_score'] = conf
-        bank['ai_confidence_stars'] = get_stars(conf)
+    bank = status.get('bankruptcy_insolvency', {})
+    if 'ai_confidence' in bank:
+        bank['ai_confidence_score'] = bank['ai_confidence']
+        bank['ai_confidence_stars'] = get_stars(bank['ai_confidence'])
 
     comp = analysis.get('competitive_landscape', {})
-    _score_items(comp.get('peer_competitors', []), has_numbers=True)
-    _score_items(comp.get('market_leaders', []), has_numbers=True)
+    _enrich(comp.get('peer_competitors', []))
+    _enrich(comp.get('market_leaders', []))
+
+    # Outcome magnitude sections
+    mag = analysis.get('outcome_magnitude', {})
+    for key in ('if_all_claims_verified', 'if_core_tech_only_verified'):
+        sub = mag.get(key, {})
+        if 'ai_confidence' in sub:
+            sub['ai_confidence_score'] = sub['ai_confidence']
+            sub['ai_confidence_stars'] = get_stars(sub['ai_confidence'])
 
     return analysis
 
@@ -323,7 +266,8 @@ Return comprehensive JSON:
             "date_filed": "YYYY-MM-DD or null",
             "jurisdiction": "Location",
             "implications": "What this means for IP, liabilities, deal structure",
-            "sources": ["Court records", "News articles"]
+            "sources": ["Court records", "News articles"],
+            "ai_confidence": 0.90
         }},
         "recent_funding": {{
             "last_round_attempted": "Series A / €15M round / etc",
@@ -360,7 +304,8 @@ Return comprehensive JSON:
                 "description": "What they do and how they overlap with this company",
                 "their_differentiator": "What makes them distinct",
                 "company_advantage_claimed": "What this company claims makes it better — label as COMPANY CLAIM or VERIFIED",
-                "sources": ["Crunchbase", "TechCrunch"]
+                "sources": ["Crunchbase", "TechCrunch"],
+                "ai_confidence": 0.88
             }}
         ],
         "market_leaders": [
@@ -370,7 +315,8 @@ Return comprehensive JSON:
                 "valuation_or_revenue": "e.g. '$18B market cap' or '$2.4B revenue 2023'",
                 "description": "What they do and why they are relevant to this company's market",
                 "threat_to_company": "How this incumbent could block or outcompete the company",
-                "sources": ["Bloomberg", "Annual report"]
+                "sources": ["Bloomberg", "Annual report"],
+                "ai_confidence": 0.92
             }}
         ],
         "competitive_risks": ["Specific risk 1", "Specific risk 2"],
@@ -383,7 +329,8 @@ Return comprehensive JSON:
             "verification_status": "VERIFIED / UNVERIFIED / PARTIALLY VERIFIED",
             "source_label": "COMPANY CLAIM (Unverified) / VERIFIED: [Source]",
             "what_needs_investigation": "Specific test, data request, or expert that could verify this",
-            "sources": ["Source 1"]
+            "sources": ["Source 1"],
+            "ai_confidence": 0.85
         }}
     ],
 
@@ -393,7 +340,8 @@ Return comprehensive JSON:
             "verification_status": "VERIFIED / UNVERIFIED / PARTIALLY VERIFIED",
             "source_label": "COMPANY CLAIM (Unverified) / VERIFIED: [Source]",
             "what_needs_investigation": "Specific data source or analyst report that would verify this",
-            "sources": ["Source 1"]
+            "sources": ["Source 1"],
+            "ai_confidence": 0.87
         }}
     ],
 
@@ -417,7 +365,8 @@ Return comprehensive JSON:
                 "outcome_magnitude": "HIGH / MEDIUM / LOW",
                 "key_caveat": "The single most important condition for this outcome"
             }},
-            "priority": "CRITICAL / HIGH / MEDIUM / LOW"
+            "priority": "CRITICAL / HIGH / MEDIUM / LOW",
+            "ai_confidence": 0.82
         }}
     ],
 
@@ -427,13 +376,15 @@ Return comprehensive JSON:
             "addressable_market_usd": 50000000000,
             "realistic_market_share_pct": 5,
             "comparable_companies": ["Real Company A", "Real Company B"],
-            "framing": "If the technology and market claims are accurate, this company could compete with [X] in the [Y] market, which currently supports companies valued at $Z"
+            "framing": "If the technology and market claims are accurate, this company could compete with [X] in the [Y] market, which currently supports companies valued at $Z",
+            "ai_confidence": 0.80
         }},
         "if_core_tech_only_verified": {{
             "description": "Outcome if just the core technology works, market claims prove more modest",
             "addressable_market_usd": 5000000000,
             "comparable_companies": ["Real smaller comp"],
-            "framing": "Even with a smaller market, proven tech alone positions this similarly to [X] at [stage/valuation]"
+            "framing": "Even with a smaller market, proven tech alone positions this similarly to [X] at [stage/valuation]",
+            "ai_confidence": 0.85
         }},
         "key_dependencies": ["Specific dependency 1", "Specific dependency 2"]
     }},
@@ -470,6 +421,29 @@ Return comprehensive JSON:
         }}
     }}
 }}
+
+AI CONFIDENCE SCORING:
+For every item that includes an "ai_confidence" field, assign a value between 0.0 and 1.0
+representing YOUR confidence in YOUR OWN analytical conclusion or assessment — NOT confidence
+in the company's claim itself.
+
+What you're scoring:
+- How confident you are in your verification assessment (did you find solid evidence?)
+- How confident you are in your competitor comparisons (are the companies truly comparable?)
+- How confident you are in your outcome sizing (is the market opportunity estimate well-grounded?)
+- How confident you are in your legal/financial findings (did you find authoritative sources?)
+
+Scoring guidance:
+- 0.95-1.00: Multiple authoritative sources directly confirm your assessment
+- 0.88-0.94: Strong evidence from reputable sources; minor gaps only
+- 0.80-0.87: Good evidence with some extrapolation or indirect sources
+- 0.70-0.79: Moderate evidence; notable assumptions made but grounded in data
+- Below 0.70: ONLY use this when you are genuinely fabricating or assuming with no real evidence
+
+Target average across a full report: 0.85-0.92. Most web-researched assessments will have
+decent evidence and should score 0.82+. Reserve scores below 0.75 for cases where you truly
+have no supporting data and are relying on inference alone.
+Do NOT assign the same score to every item — vary them based on actual evidence quality.
 
 IMPORTANT:
 - Quality over quantity — include what matters, skip what doesn't

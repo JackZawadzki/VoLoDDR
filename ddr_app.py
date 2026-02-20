@@ -31,7 +31,7 @@ from ddr_engine import (
     extract_pdf,
     analyze,
     extract_graph_data_fallback,
-    add_confidence_scores,
+    add_confidence_display,
     research_tech_benchmark,
 )
 from ddr_report import (
@@ -316,9 +316,9 @@ if run_button and uploaded_file:
             status.update(label="🔬 Analysis complete", state="complete")
 
         # ── Step 3: Score ────────────────────────────────────────────────
-        with st.status("📊 Adding confidence scores...", expanded=False) as status:
-            scored = add_confidence_scores(analysis_result)
-            status.update(label="📊 Confidence scores added", state="complete")
+        with st.status("📊 Processing AI confidence scores...", expanded=False) as status:
+            scored = add_confidence_display(analysis_result)
+            status.update(label="📊 Confidence scores processed", state="complete")
 
         # ── Step 4: Generate PDF ─────────────────────────────────────────
         with st.status("📑 Generating PDF report...", expanded=False) as status:

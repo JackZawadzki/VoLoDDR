@@ -517,7 +517,8 @@ def generate_report_pdf(analysis: dict, output_path: str):
     story.append(_p(
         f"<i><b>Methodology:</b> Analysis based on {analysis.get('sources_consulted', '?')} sources "
         f"including court records, financial databases, and industry reports. Confidence scores reflect "
-        f"source quality, recency, and corroboration. No investment recommendation is made.</i><br/><br/>"
+        f"the AI's self-assessed confidence in its own analytical conclusions based on the quality "
+        f"and depth of evidence found during research. No investment recommendation is made.</i><br/><br/>"
         f"<b>Report Generated:</b> {datetime.now().strftime('%B %d, %Y at %H:%M:%S')}",
         S["body"],
     ))
