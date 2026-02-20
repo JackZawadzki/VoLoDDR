@@ -5,7 +5,7 @@ All output generation for the VoLo DDR tool.
 
 Handles:
   - PDF due diligence report (ReportLab)
-  - Three matplotlib analysis charts
+  - Four matplotlib analysis charts (revenue, market, tech table, tech strip)
   - Chart PDF export
 
 Key feature: _p(text, style) auto-escaping wrapper eliminates manual _esc()
