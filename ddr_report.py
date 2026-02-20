@@ -303,11 +303,9 @@ def generate_report_pdf(analysis: dict, output_path: str):
             label = ('✅' if v_status == 'VERIFIED'
                      else '⚠️' if v_status == 'PARTIALLY VERIFIED'
                      else '❌')
-            score = claim.get('ai_confidence_score')
-            conf_str = f" &nbsp;| &nbsp;Confidence: {score:.0%}" if score is not None else ""
 
             text = (
-                f"<b>{label} {claim.get('claim', 'Not specified')}</b>{conf_str}<br/>"
+                f"<b>{label} {claim.get('claim', 'Not specified')}</b><br/>"
                 f"{claim.get('source_label', v_status)}"
             )
             if include_sources and claim.get('sources'):
@@ -325,13 +323,11 @@ def generate_report_pdf(analysis: dict, output_path: str):
     for comp in comp_landscape.get('peer_competitors', []):
         funding = comp.get('funding_raised_usd') or 0
         funding_str = _dollar(funding) + " raised" if funding else "Funding unknown"
-        score = comp.get('ai_confidence_score')
-        conf_tag = f" &nbsp;| &nbsp;Confidence: {score:.0%}" if score is not None else ""
         if comp_landscape.get('peer_competitors', []).index(comp) == 0:
             story.append(_p("Peer-Stage Competitors", S["subheading"]))
         story.append(_p(
             f"<b>{comp.get('name', 'Unknown')}</b> "
-            f"({comp.get('stage', '?')} — {funding_str}){conf_tag}<br/>"
+            f"({comp.get('stage', '?')} — {funding_str})<br/>"
             f"{comp.get('description', '')}<br/>"
             f"<b>Their edge:</b> {comp.get('their_differentiator', 'N/A')}<br/>"
             f"<b>Company's claimed advantage:</b> {comp.get('company_advantage_claimed', 'N/A')}"
@@ -345,11 +341,9 @@ def generate_report_pdf(analysis: dict, output_path: str):
     if leaders:
         story.append(_p("Market Leaders &amp; Incumbents", S["subheading"]))
         for leader in leaders:
-            score = leader.get('ai_confidence_score')
-            conf_tag = f" &nbsp;| &nbsp;Confidence: {score:.0%}" if score is not None else ""
             story.append(_p(
                 f"<b>{leader.get('name', 'Unknown')}</b> — "
-                f"{leader.get('market_position', '')}{conf_tag}<br/>"
+                f"{leader.get('market_position', '')}<br/>"
                 f"{leader.get('valuation_or_revenue', '')}<br/>"
                 f"{leader.get('description', '')}<br/>"
                 f"<b>Threat to company:</b> {leader.get('threat_to_company', 'N/A')}"
@@ -462,6 +456,9 @@ def generate_report_pdf(analysis: dict, output_path: str):
         if if_all.get('comparable_companies'):
             details += f"<b>Comparable Companies:</b> {', '.join(if_all['comparable_companies'])}<br/>"
         story.append(_p(details, S["body"]))
+        score = if_all.get('ai_confidence_score')
+        if score is not None:
+            story.append(_p(f"<b>AI Confidence in This Assessment:</b> {score:.0%}", S["body"]))
         story.append(Spacer(1, 0.2 * inch))
 
     if_core = magnitude.get('if_core_tech_only_verified', {})
@@ -474,6 +471,9 @@ def generate_report_pdf(analysis: dict, output_path: str):
         if if_core.get('comparable_companies'):
             details += f"<b>Comparable Companies:</b> {', '.join(if_core['comparable_companies'])}<br/>"
         story.append(_p(details, S["body"]))
+        score = if_core.get('ai_confidence_score')
+        if score is not None:
+            story.append(_p(f"<b>AI Confidence in This Assessment:</b> {score:.0%}", S["body"]))
         story.append(Spacer(1, 0.2 * inch))
 
     deps = magnitude.get('key_dependencies', [])
@@ -517,8 +517,9 @@ def generate_report_pdf(analysis: dict, output_path: str):
     story.append(_p(
         f"<i><b>Methodology:</b> Analysis based on {analysis.get('sources_consulted', '?')} sources "
         f"including court records, financial databases, and industry reports. Confidence scores reflect "
-        f"the AI's self-assessed confidence in its own analytical conclusions based on the quality "
-        f"and depth of evidence found during research. No investment recommendation is made.</i><br/><br/>"
+        f"the AI's self-assessed confidence in its own analytical conclusions (shown only on "
+        f"significant synthesis sections) based on the quality and depth of evidence found "
+        f"during research. No investment recommendation is made.</i><br/><br/>"
         f"<b>Report Generated:</b> {datetime.now().strftime('%B %d, %Y at %H:%M:%S')}",
         S["body"],
     ))
@@ -742,19 +743,12 @@ _STAGE_STYLE = {
 _STAGE_LABELS = {"production": "Prod.", "target": "Target", "prototype": "Proto."}
 
 
-def _chart_tech_distribution(data: dict) -> plt.Figure:
+def _parse_graph3(data: dict) -> dict:
+    """Parse graph3 data into a flat dict used by both chart functions."""
     g = data["graph3"]
     company = data.get("company_name", g.get("company_name", "Company"))
-    metric_name = g["metric_name"]
-    metric_unit = g["metric_unit"]
-    target_year = g.get("target_year", "")
-    company_val = g["company_claim"]
-    company_stage = g.get("company_claim_stage", "target")
     competitors = g["competitor_claims"]
     higher_better = g.get("higher_is_better", True)
-    current_best = g.get("current_best_in_class")
-    conditions_note = g.get("conditions_note", "")
-    measurement_basis = g.get("measurement_basis", "")
 
     # Backward compatibility: add default stage if missing
     has_stage_data = any("stage" in c for c in competitors)
@@ -763,40 +757,66 @@ def _chart_tech_distribution(data: dict) -> plt.Figure:
             c["stage"] = "target"
 
     comp_values = [c["value"] for c in competitors]
+    company_val = g["company_claim"]
     all_values = comp_values + [company_val]
     sorted_comps = sorted(competitors, key=lambda c: c["value"], reverse=higher_better)
 
-    # Percentiles from raw competitor data (no smoothing)
-    p10 = np.percentile(comp_values, 10) if len(comp_values) >= 3 else None
-    p50 = np.percentile(comp_values, 50)
-    p90 = np.percentile(comp_values, 90) if len(comp_values) >= 3 else None
+    return {
+        "g": g,
+        "company": company,
+        "metric_name": g["metric_name"],
+        "metric_unit": g["metric_unit"],
+        "target_year": g.get("target_year", ""),
+        "company_val": company_val,
+        "company_stage": g.get("company_claim_stage", "target"),
+        "competitors": competitors,
+        "higher_better": higher_better,
+        "current_best": g.get("current_best_in_class"),
+        "conditions_note": g.get("conditions_note", ""),
+        "measurement_basis": g.get("measurement_basis", ""),
+        "has_stage_data": has_stage_data,
+        "comp_values": comp_values,
+        "all_values": all_values,
+        "sorted_comps": sorted_comps,
+        "p10": np.percentile(comp_values, 10) if len(comp_values) >= 3 else None,
+        "p50": np.percentile(comp_values, 50),
+        "p90": np.percentile(comp_values, 90) if len(comp_values) >= 3 else None,
+    }
 
-    # ── Layout: table on top, strip chart below ──
+
+def _chart_tech_table(data: dict) -> plt.Figure:
+    """Standalone competitor benchmark table (one full page)."""
+    d = _parse_graph3(data)
+    sorted_comps = d["sorted_comps"]
+    company = d["company"]
+    company_val = d["company_val"]
+    company_stage = d["company_stage"]
+    metric_unit = d["metric_unit"]
+    metric_name = d["metric_name"]
+    target_year = d["target_year"]
+    measurement_basis = d["measurement_basis"]
+
     n_rows = len(sorted_comps) + 1  # +1 for company row
-    tbl_height_ratio = max(1.5, n_rows * 0.35)
-    fig, (ax_tbl, ax) = plt.subplots(
-        2, 1, figsize=(10, 4.5 + tbl_height_ratio * 1.8),
-        gridspec_kw={"height_ratios": [tbl_height_ratio, 2.5]},
-    )
+    fig_h = max(5, n_rows * 0.5 + 2)
+    fig, ax_tbl = plt.subplots(figsize=(10, fig_h))
     fig.patch.set_facecolor("white")
 
-    # ── Top panel: competitor table with Stage column ──
     ax_tbl.axis("off")
     year_str = f" (Target ~{target_year})" if target_year else ""
     basis_str = f" — {measurement_basis}" if measurement_basis else ""
     ax_tbl.set_title(
         f"Technology Benchmark — {metric_name} ({metric_unit}){year_str}{basis_str}",
-        fontsize=11, fontweight="bold", color=TEXT_DARK, pad=8,
+        fontsize=13, fontweight="bold", color=TEXT_DARK, pad=12,
     )
 
     tbl_data = []
     for i, c in enumerate(sorted_comps):
-        name = c["name"][:30] if len(c["name"]) > 30 else c["name"]
+        name = c["name"][:35] if len(c["name"]) > 35 else c["name"]
         stage_lbl = _STAGE_LABELS.get(c.get("stage", "target"), "Target")
-        src = c.get("source", "")[:35]
+        src = c.get("source", "")[:45]
         tbl_data.append([str(i + 1), name, f"{c['value']:.4g}", stage_lbl, src])
     company_stage_lbl = _STAGE_LABELS.get(company_stage, "Target")
-    tbl_data.append(["*", company[:30], f"{company_val:.4g}", company_stage_lbl, "Pitch deck"])
+    tbl_data.append(["*", company[:35], f"{company_val:.4g}", company_stage_lbl, "Pitch deck"])
 
     tbl = ax_tbl.table(
         cellText=tbl_data,
@@ -806,10 +826,11 @@ def _chart_tech_distribution(data: dict) -> plt.Figure:
         colWidths=[0.05, 0.30, 0.15, 0.12, 0.38],
     )
     tbl.auto_set_font_size(False)
-    tbl.set_fontsize(9)
+    tbl.set_fontsize(10)
 
-    row_h = max(0.06, 0.45 / max(n_rows, 3))
-    header_h = row_h * 1.25
+    # Generous row heights — full page available
+    row_h = max(0.045, 0.6 / max(n_rows, 3))
+    header_h = row_h * 1.3
 
     for (row, col), cell in tbl.get_celld().items():
         cell.set_edgecolor("#d4e6da")
@@ -826,7 +847,28 @@ def _chart_tech_distribution(data: dict) -> plt.Figure:
             cell.set_facecolor("white" if row % 2 == 1 else "#f8fbf9")
             cell.set_height(row_h)
 
-    # ── Bottom panel: strip chart ──
+    _add_ai_watermark(fig)
+    fig.tight_layout()
+    return fig
+
+
+def _chart_tech_strip(data: dict) -> plt.Figure:
+    """Standalone strip chart visualization (one full page)."""
+    d = _parse_graph3(data)
+    company = d["company"]
+    company_val = d["company_val"]
+    metric_name = d["metric_name"]
+    metric_unit = d["metric_unit"]
+    competitors = d["competitors"]
+    higher_better = d["higher_better"]
+    current_best = d["current_best"]
+    conditions_note = d["conditions_note"]
+    has_stage_data = d["has_stage_data"]
+    all_values = d["all_values"]
+    p10, p50, p90 = d["p10"], d["p50"], d["p90"]
+
+    fig, ax = plt.subplots(figsize=(10, 6))
+    fig.patch.set_facecolor("white")
     ax.set_facecolor("white")
 
     # Plot competitor data points grouped by stage
@@ -835,43 +877,41 @@ def _chart_tech_distribution(data: dict) -> plt.Figure:
         if not stage_comps:
             continue
         x_vals = [c["value"] for c in stage_comps]
-        # Slight vertical jitter to separate overlapping points
         n = len(stage_comps)
         y_vals = [(i - (n - 1) / 2) * 0.06 for i in range(n)]
         ax.scatter(
             x_vals, y_vals,
             marker=style["marker"], color=style["color"],
-            s=90, zorder=10, edgecolors="white", linewidths=0.8,
+            s=100, zorder=10, edgecolors="white", linewidths=0.8,
             label=style["label"],
         )
-        # Alternating label positions to avoid overlap
         for idx, (c, yv) in enumerate(zip(stage_comps, y_vals)):
-            offset_y = 9 if idx % 2 == 0 else -12
+            offset_y = 10 if idx % 2 == 0 else -13
             va = "bottom" if idx % 2 == 0 else "top"
             ax.annotate(
                 c["name"], (c["value"], yv),
                 textcoords="offset points", xytext=(0, offset_y),
-                fontsize=7, color=TEXT_MID, ha="center", va=va,
+                fontsize=8, color=TEXT_MID, ha="center", va=va,
             )
 
     # Company claim — prominent star marker
     ax.scatter(
         [company_val], [0],
-        marker="*", color=VOLO_GREEN, s=280, zorder=15,
+        marker="*", color=VOLO_GREEN, s=320, zorder=15,
         edgecolors="white", linewidths=1.0,
         label=f"{company} (claim)",
     )
     ax.annotate(
         f"{company}: {company_val:.4g} {metric_unit}",
         (company_val, 0),
-        textcoords="offset points", xytext=(0, -16),
-        fontsize=9, fontweight="bold", color=VOLO_GREEN,
+        textcoords="offset points", xytext=(0, -18),
+        fontsize=10, fontweight="bold", color=VOLO_GREEN,
         ha="center", va="top",
         bbox=dict(boxstyle="round,pad=0.3", facecolor="white",
                   edgecolor=VOLO_GREEN, linewidth=1.5, alpha=0.95),
     )
 
-    # P10 / P50 / P90 reference lines (from raw competitor data, no smoothing)
+    # P10 / P50 / P90 reference lines
     y_lo, y_hi = ax.get_ylim()
     pct_lines = []
     if p10 is not None:
@@ -883,7 +923,7 @@ def _chart_tech_distribution(data: dict) -> plt.Figure:
     for val, color, label in pct_lines:
         ax.axvline(val, color=color, linewidth=1.2, linestyle="--", alpha=0.5, zorder=3)
         ax.text(val, y_hi * 0.85, f"{label}: {val:.4g}",
-                fontsize=7.5, color=color, fontweight="bold", ha="center",
+                fontsize=8, color=color, fontweight="bold", ha="center",
                 bbox=dict(boxstyle="round,pad=0.2", facecolor="white",
                           edgecolor=color, alpha=0.85))
 
@@ -893,35 +933,31 @@ def _chart_tech_distribution(data: dict) -> plt.Figure:
                    alpha=0.6, zorder=3)
         ax.text(current_best, y_lo * 0.8,
                 f"Best today: {current_best:.4g}",
-                fontsize=7, color="#666666", ha="center",
+                fontsize=7.5, color="#666666", ha="center",
                 bbox=dict(boxstyle="round,pad=0.2", facecolor="#f5f5f5",
                           edgecolor="#bbbbbb", alpha=0.85))
 
-    # Axis styling — clean and minimal
+    # Axis styling
     direction = "Higher = Better" if higher_better else "Lower = Better"
     ax.set_xlabel(f"{metric_name} ({metric_unit})  [{direction}]",
-                  fontsize=10, color=TEXT_MID)
+                  fontsize=11, color=TEXT_MID)
     ax.set_yticks([])
     ax.set_ylabel("")
     ax.set_title(f"{company} — Technology Claim vs. Competitive Landscape",
-                 fontsize=12, fontweight="bold", color=TEXT_DARK, pad=10)
+                 fontsize=13, fontweight="bold", color=TEXT_DARK, pad=12)
 
-    # Clean spines
     ax.spines["top"].set_visible(False)
     ax.spines["right"].set_visible(False)
     ax.spines["left"].set_visible(False)
     ax.spines["bottom"].set_color(GRID_COLOR)
 
-    # X-axis padding
     x_pad = (max(all_values) - min(all_values)) * 0.15
     ax.set_xlim(min(all_values) - x_pad, max(all_values) + x_pad)
 
-    # Subtle vertical grid
     ax.xaxis.grid(True, color=GRID_COLOR, linewidth=0.5, linestyle="--", alpha=0.5)
     ax.set_axisbelow(True)
 
-    # Legend
-    ax.legend(fontsize=8, loc="upper right", framealpha=0.9,
+    ax.legend(fontsize=9, loc="upper right", framealpha=0.9,
               edgecolor=GRID_COLOR, ncol=1, handletextpad=0.5)
 
     # Methodology note
@@ -934,12 +970,12 @@ def _chart_tech_distribution(data: dict) -> plt.Figure:
         note_parts.append("Stage classification not available; all shown as targets.")
     methodology_text = " ".join(note_parts)
     fig.text(0.5, 0.01, methodology_text,
-             ha="center", fontsize=7, color=TEXT_MID, style="italic",
+             ha="center", fontsize=7.5, color=TEXT_MID, style="italic",
              wrap=True)
 
     _add_ai_watermark(fig)
     fig.tight_layout()
-    fig.subplots_adjust(hspace=0.30, bottom=0.07, top=0.94)
+    fig.subplots_adjust(bottom=0.08)
     return fig
 
 
@@ -961,17 +997,18 @@ def _blank_figure(message: str) -> plt.Figure:
 
 def build_charts(graph_data: dict) -> list:
     """
-    Build three matplotlib figures from graph data dict.
+    Build four matplotlib figures from graph data dict.
 
     Args:
         graph_data: Dict with keys company_name, sector, graph1, graph2, graph3.
                     graph3 comes from a dedicated research_tech_benchmark() call.
 
     Returns:
-        [fig1, fig2, fig3] — ready for st.pyplot() or PDF embedding.
+        [fig_revenue, fig_market, fig_tech_table, fig_tech_strip]
+        — ready for st.pyplot() or PDF embedding.
     """
     figs = []
-    for build_fn in (_chart_revenue, _chart_market, _chart_tech_distribution):
+    for build_fn in (_chart_revenue, _chart_market, _chart_tech_table, _chart_tech_strip):
         try:
             figs.append(build_fn(graph_data))
         except Exception as e:
@@ -980,7 +1017,7 @@ def build_charts(graph_data: dict) -> list:
 
 
 def save_charts_pdf(figs: list, output_path: str, company_name: str) -> str:
-    """Save the three figures to a single multi-page PDF with a cover page."""
+    """Save figures to a single multi-page PDF with a cover page."""
     from matplotlib.backends.backend_pdf import PdfPages
 
     with PdfPages(output_path) as pdf:

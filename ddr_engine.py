@@ -183,8 +183,13 @@ def add_confidence_display(analysis: dict) -> dict:
 
     The AI assigns ai_confidence scores (0.0-1.0) during analysis — these
     reflect how confident the AI is in its OWN analytical conclusions, not
-    confidence in the company's claims.  This function simply reads those
-    scores and adds star-rating strings for PDF display.
+    confidence in the company's claims.  This function reads those scores
+    and adds star-rating strings for PDF display.
+
+    Confidence is only applied to genuine AI analytical conclusions:
+      - unverified_claims (outcome sizing, investigation assessment)
+      - bankruptcy_insolvency (legal/financial finding)
+      - outcome_magnitude scenarios (forward-looking analysis)
     """
 
     def _enrich(items):
@@ -194,21 +199,17 @@ def add_confidence_display(analysis: dict) -> dict:
                 item['ai_confidence_score'] = conf
                 item['ai_confidence_stars'] = get_stars(conf)
 
-    _enrich(analysis.get('technology_claims', []))
-    _enrich(analysis.get('market_claims', []))
+    # Unverified claims — AI synthesizes why unverified + sizes outcomes
     _enrich(analysis.get('unverified_claims', []))
 
+    # Bankruptcy/insolvency — AI concludes legal/financial status
     status = analysis.get('company_financial_legal_status', {})
     bank = status.get('bankruptcy_insolvency', {})
     if 'ai_confidence' in bank:
         bank['ai_confidence_score'] = bank['ai_confidence']
         bank['ai_confidence_stars'] = get_stars(bank['ai_confidence'])
 
-    comp = analysis.get('competitive_landscape', {})
-    _enrich(comp.get('peer_competitors', []))
-    _enrich(comp.get('market_leaders', []))
-
-    # Outcome magnitude sections
+    # Outcome magnitude — AI's forward-looking scenario analysis
     mag = analysis.get('outcome_magnitude', {})
     for key in ('if_all_claims_verified', 'if_core_tech_only_verified'):
         sub = mag.get(key, {})
@@ -304,8 +305,7 @@ Return comprehensive JSON:
                 "description": "What they do and how they overlap with this company",
                 "their_differentiator": "What makes them distinct",
                 "company_advantage_claimed": "What this company claims makes it better — label as COMPANY CLAIM or VERIFIED",
-                "sources": ["Crunchbase", "TechCrunch"],
-                "ai_confidence": 0.88
+                "sources": ["Crunchbase", "TechCrunch"]
             }}
         ],
         "market_leaders": [
@@ -315,8 +315,7 @@ Return comprehensive JSON:
                 "valuation_or_revenue": "e.g. '$18B market cap' or '$2.4B revenue 2023'",
                 "description": "What they do and why they are relevant to this company's market",
                 "threat_to_company": "How this incumbent could block or outcompete the company",
-                "sources": ["Bloomberg", "Annual report"],
-                "ai_confidence": 0.92
+                "sources": ["Bloomberg", "Annual report"]
             }}
         ],
         "competitive_risks": ["Specific risk 1", "Specific risk 2"],
@@ -329,8 +328,7 @@ Return comprehensive JSON:
             "verification_status": "VERIFIED / UNVERIFIED / PARTIALLY VERIFIED",
             "source_label": "COMPANY CLAIM (Unverified) / VERIFIED: [Source]",
             "what_needs_investigation": "Specific test, data request, or expert that could verify this",
-            "sources": ["Source 1"],
-            "ai_confidence": 0.85
+            "sources": ["Source 1"]
         }}
     ],
 
@@ -340,8 +338,7 @@ Return comprehensive JSON:
             "verification_status": "VERIFIED / UNVERIFIED / PARTIALLY VERIFIED",
             "source_label": "COMPANY CLAIM (Unverified) / VERIFIED: [Source]",
             "what_needs_investigation": "Specific data source or analyst report that would verify this",
-            "sources": ["Source 1"],
-            "ai_confidence": 0.87
+            "sources": ["Source 1"]
         }}
     ],
 
@@ -423,15 +420,20 @@ Return comprehensive JSON:
 }}
 
 AI CONFIDENCE SCORING:
-For every item that includes an "ai_confidence" field, assign a value between 0.0 and 1.0
-representing YOUR confidence in YOUR OWN analytical conclusion or assessment — NOT confidence
-in the company's claim itself.
+Only the fields marked with "ai_confidence" in the schema above should receive a confidence
+score. These are sections where you are making significant analytical conclusions or
+synthesizing findings — NOT sections that merely report discovered data.
 
-What you're scoring:
-- How confident you are in your verification assessment (did you find solid evidence?)
-- How confident you are in your competitor comparisons (are the companies truly comparable?)
-- How confident you are in your outcome sizing (is the market opportunity estimate well-grounded?)
-- How confident you are in your legal/financial findings (did you find authoritative sources?)
+Specifically, ai_confidence applies to:
+- unverified_claims: your assessment of why something is unverified and your outcome sizing
+- outcome_magnitude scenarios: your forward-looking analytical conclusions
+- bankruptcy_insolvency: your legal/financial finding from research
+
+Do NOT add ai_confidence to technology_claims, market_claims, peer_competitors, or
+market_leaders — those are data reporting, not analytical conclusions.
+
+Assign a value between 0.0 and 1.0 representing YOUR confidence in YOUR OWN analytical
+conclusion — NOT confidence in the company's claim itself.
 
 Scoring guidance:
 - 0.95-1.00: Multiple authoritative sources directly confirm your assessment
