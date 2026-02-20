@@ -767,7 +767,7 @@ def _chart_tech_distribution(data: dict) -> plt.Figure:
 
     # Two-panel layout: chart left, table right
     fig, (ax, ax_tbl) = plt.subplots(
-        1, 2, figsize=(13, 6), gridspec_kw={"width_ratios": [3, 1.2]},
+        1, 2, figsize=(14, 7), gridspec_kw={"width_ratios": [2.5, 1]},
     )
     fig.patch.set_facecolor("white")
     ax.set_facecolor(VOLO_PALE)
@@ -837,20 +837,20 @@ def _chart_tech_distribution(data: dict) -> plt.Figure:
     tbl_data = []
     for i, c in enumerate(sorted_comps):
         name = c["name"]
-        if len(name) > 22:
-            name = name[:20] + "…"
+        if len(name) > 28:
+            name = name[:26] + "…"
         tbl_data.append([str(i + 1), name, f"{c['value']:.4g}"])
-    tbl_data.append(["★", company[:20], f"{company_val:.4g}"])
+    tbl_data.append(["★", company[:26], f"{company_val:.4g}"])
 
     tbl = ax_tbl.table(
         cellText=tbl_data,
         colLabels=["#", "Company", metric_unit],
         loc="upper center",
         cellLoc="left",
-        colWidths=[0.12, 0.58, 0.30],
+        colWidths=[0.10, 0.60, 0.30],
     )
     tbl.auto_set_font_size(False)
-    tbl.set_fontsize(7.5)
+    tbl.set_fontsize(8)
 
     for (row, col), cell in tbl.get_celld().items():
         cell.set_edgecolor("#d4e6da")
@@ -874,7 +874,7 @@ def _chart_tech_distribution(data: dict) -> plt.Figure:
 
     _add_ai_watermark(fig)
     fig.tight_layout()
-    fig.subplots_adjust(wspace=0.05)
+    fig.subplots_adjust(wspace=0.12, left=0.06, right=0.98, bottom=0.10, top=0.92)
     return fig
 
 
