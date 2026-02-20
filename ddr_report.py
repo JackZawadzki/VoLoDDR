@@ -269,34 +269,6 @@ def generate_report_pdf(analysis: dict, output_path: str):
     story.append(_snapshot_table(right_data))
     story.append(Spacer(1, 0.25 * inch))
 
-    # Financial/legal callouts
-    if bank_status not in ['NONE FOUND', 'UNKNOWN', 'ACTIVE'] and bank.get('details'):
-        story.append(_p(
-            f"<b>⚠️ Bankruptcy/Insolvency:</b> {bank['details']} "
-            f"— {bank.get('implications', '')}",
-            S["alert"],
-        ))
-    if fund_outcome == 'FAILED' and fund.get('failure_reasons'):
-        sought = (fund.get('amount_sought') or 0) / 1e6
-        story.append(_p(
-            f"<b>⚠️ Failed Funding Round:</b> Sought {_dollar(sought * 1e6)} — "
-            f"{fund.get('failure_reasons', 'Reasons not disclosed')}",
-            S["alert"],
-        ))
-    if ip_status in ['DISPUTED', 'ENCUMBERED'] and ip.get('details'):
-        enc_str = f"— {ip['encumbrances']}" if ip.get('encumbrances') else ""
-        story.append(_p(
-            f"<b>⚠️ IP {ip_status}:</b> {ip.get('details', '')} {enc_str}",
-            S["alert"],
-        ))
-    if has_lit:
-        lawsuits = lit.get('active_lawsuits', [])
-        debt_str = f" — Debts: {lit['outstanding_debts']}" if lit.get('outstanding_debts') else ""
-        story.append(_p(
-            f"<b>⚠️ Active Litigation:</b> {'; '.join(lawsuits)}{debt_str}",
-            S["alert"],
-        ))
-
     # Company overview
     overview = analysis.get('company_overview', {})
     story.append(_p("COMPANY OVERVIEW", S["heading"]))
@@ -304,6 +276,24 @@ def generate_report_pdf(analysis: dict, output_path: str):
     story.append(_p(f"<b>Stage:</b> {overview.get('stage', 'Unknown')}", S["body"]))
     if status_obj.get('notes') and overall_status not in ['DISTRESSED', 'CRITICAL']:
         story.append(_p(f"<b>Background:</b> {status_obj['notes']}", S["body"]))
+
+    # Weave any financial/legal flags into the overview as a brief note
+    flags = []
+    if bank_status not in ['NONE FOUND', 'UNKNOWN', 'ACTIVE'] and bank.get('details'):
+        flags.append(f"Bankruptcy/Insolvency ({bank_status}): {bank['details']}")
+    if fund_outcome == 'FAILED' and fund.get('failure_reasons'):
+        sought = (fund.get('amount_sought') or 0) / 1e6
+        flags.append(f"Failed funding round (sought {_dollar(sought * 1e6)}): {fund.get('failure_reasons', 'Reasons not disclosed')}")
+    if ip_status in ['DISPUTED', 'ENCUMBERED'] and ip.get('details'):
+        flags.append(f"IP {ip_status}: {ip.get('details', '')}")
+    if has_lit:
+        lawsuits = lit.get('active_lawsuits', [])
+        flags.append(f"Active litigation: {'; '.join(lawsuits)}")
+    if flags:
+        story.append(_p(
+            "<b>⚠️ Key Legal/Financial Flags:</b> " + " | ".join(flags),
+            S["alert"],
+        ))
 
     story.append(PageBreak())
 
