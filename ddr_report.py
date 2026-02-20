@@ -765,14 +765,58 @@ def _chart_tech_distribution(data: dict) -> plt.Figure:
     p50 = np.percentile(comp_values, 50)
     p90 = np.percentile(comp_values, 90)
 
-    # Two-panel layout: chart left, table right
-    fig, (ax, ax_tbl) = plt.subplots(
-        1, 2, figsize=(14, 7), gridspec_kw={"width_ratios": [2.5, 1]},
+    # Stacked layout: table on top, chart below
+    n_rows = len(sorted_comps) + 1  # +1 for company row
+    # Scale table height based on number of competitors
+    tbl_height_ratio = max(1.0, n_rows * 0.18)
+    fig, (ax_tbl, ax) = plt.subplots(
+        2, 1, figsize=(10, 5 + tbl_height_ratio * 1.5),
+        gridspec_kw={"height_ratios": [tbl_height_ratio, 3]},
     )
     fig.patch.set_facecolor("white")
+
+    # ── Top panel: competitor table ──
+    ax_tbl.axis("off")
+    year_str = f" (Target ~{target_year})" if target_year else ""
+    ax_tbl.set_title(f"Competitor Claims — {metric_name} ({metric_unit}){year_str}",
+                     fontsize=11, fontweight="bold", color=TEXT_DARK, pad=8)
+
+    tbl_data = []
+    for i, c in enumerate(sorted_comps):
+        name = c["name"]
+        if len(name) > 35:
+            name = name[:33] + "…"
+        tbl_data.append([str(i + 1), name, f"{c['value']:.4g}"])
+    tbl_data.append(["★", company[:33], f"{company_val:.4g}"])
+
+    tbl = ax_tbl.table(
+        cellText=tbl_data,
+        colLabels=["#", "Company", metric_unit],
+        loc="upper center",
+        cellLoc="left",
+        colWidths=[0.08, 0.65, 0.27],
+    )
+    tbl.auto_set_font_size(False)
+    tbl.set_fontsize(9)
+
+    for (row, col), cell in tbl.get_celld().items():
+        cell.set_edgecolor("#d4e6da")
+        cell.set_linewidth(0.5)
+        if row == 0:
+            cell.set_facecolor(VOLO_GREEN)
+            cell.set_text_props(color="white", fontweight="bold")
+            cell.set_height(0.07)
+        elif row == len(tbl_data):
+            cell.set_facecolor("#e8f5e9")
+            cell.set_text_props(fontweight="bold", color=VOLO_GREEN)
+            cell.set_height(0.055)
+        else:
+            cell.set_facecolor("white" if row % 2 == 1 else "#f8fbf9")
+            cell.set_height(0.055)
+
+    # ── Bottom panel: distribution curve ──
     ax.set_facecolor(VOLO_PALE)
 
-    # Left panel: distribution curve
     if len(x_range) > 0:
         ax.fill_between(x_range, density, alpha=0.18, color=ACCENT_BLUE)
         ax.plot(x_range, density, color=ACCENT_BLUE, linewidth=2, alpha=0.7)
@@ -817,64 +861,25 @@ def _chart_tech_distribution(data: dict) -> plt.Figure:
                 bbox=dict(boxstyle="round,pad=0.2", facecolor="#f5f5f5",
                           edgecolor="#bbbbbb", alpha=0.85))
 
-    year_str = f" (Target ~{target_year})" if target_year else ""
     direction = "Higher = Better" if higher_better else "Lower = Better"
 
     _apply_base_style(
         ax,
-        title=f"{company} — Tech Claims vs. Competitors{year_str}",
+        title=f"{company} — Tech Claims vs. Competitors",
         xlabel=f"{metric_name} ({metric_unit})  [{direction}]",
         ylabel="",
     )
     ax.set_yticks([])
     ax.set_ylim(bottom=-0.08 * y_top, top=y_top * 1.25)
 
-    # Right panel: competitor table
-    ax_tbl.axis("off")
-    ax_tbl.set_title(f"Competitor Claims\n({metric_unit})",
-                     fontsize=10, fontweight="bold", color=TEXT_DARK, pad=10)
-
-    tbl_data = []
-    for i, c in enumerate(sorted_comps):
-        name = c["name"]
-        if len(name) > 28:
-            name = name[:26] + "…"
-        tbl_data.append([str(i + 1), name, f"{c['value']:.4g}"])
-    tbl_data.append(["★", company[:26], f"{company_val:.4g}"])
-
-    tbl = ax_tbl.table(
-        cellText=tbl_data,
-        colLabels=["#", "Company", metric_unit],
-        loc="upper center",
-        cellLoc="left",
-        colWidths=[0.10, 0.60, 0.30],
-    )
-    tbl.auto_set_font_size(False)
-    tbl.set_fontsize(8)
-
-    for (row, col), cell in tbl.get_celld().items():
-        cell.set_edgecolor("#d4e6da")
-        cell.set_linewidth(0.5)
-        if row == 0:
-            cell.set_facecolor(VOLO_GREEN)
-            cell.set_text_props(color="white", fontweight="bold")
-            cell.set_height(0.06)
-        elif row == len(tbl_data):
-            cell.set_facecolor("#e8f5e9")
-            cell.set_text_props(fontweight="bold", color=VOLO_GREEN)
-            cell.set_height(0.045)
-        else:
-            cell.set_facecolor("white" if row % 2 == 1 else "#f8fbf9")
-            cell.set_height(0.045)
-
     n_comps = len(competitors)
-    fig.text(0.35, 0.01,
+    fig.text(0.5, 0.01,
              f"Distribution of {n_comps} competitor claims · P10/P50/P90 of landscape shown",
              ha="center", fontsize=7.5, color=TEXT_MID, style="italic")
 
     _add_ai_watermark(fig)
     fig.tight_layout()
-    fig.subplots_adjust(wspace=0.12, left=0.06, right=0.98, bottom=0.10, top=0.92)
+    fig.subplots_adjust(hspace=0.25, bottom=0.06, top=0.94)
     return fig
 
 
