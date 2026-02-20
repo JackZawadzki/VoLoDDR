@@ -21,7 +21,7 @@ import time
 from typing import Dict  # noqa: F401 — kept for potential future use
 
 from pypdf import PdfReader
-from anthropic import Anthropic, RateLimitError
+from anthropic import Anthropic, RateLimitError, APIStatusError
 
 try:
     from dotenv import load_dotenv
@@ -92,6 +92,12 @@ def _agentic_call(client: Anthropic, prompt: str,
                     time.sleep(60)
                 else:
                     raise  # give up after 5 attempts
+            except APIStatusError as e:
+                # 529 = Anthropic overloaded — shorter wait, then retry
+                if e.status_code == 529 and attempt < 4:
+                    time.sleep(30)
+                else:
+                    raise
 
         # Collect the last text block
         for block in response.content:
