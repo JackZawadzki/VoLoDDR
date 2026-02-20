@@ -45,122 +45,171 @@ st.markdown("""
     @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
     html, body, [class*="css"] { font-family: 'Inter', sans-serif; }
 
-    /* ── Force dark text everywhere on light backgrounds ── */
-    .stApp { background-color: #f4f8f5; color: #1a1a1a; }
+    /* ── Botanical Luxury — base palette ── */
+    .stApp { background-color: #F5F1EB; color: #1a1a1a; }
     .stApp p, .stApp label, .stApp span, .stApp div { color: #1a1a1a; }
     .stMarkdown p { color: #1a1a1a !important; }
-    .stCaption, .stCaption p { color: #555555 !important; }
+    .stCaption, .stCaption p { color: #5A554F !important; }
 
     /* ── Block container ── */
     .block-container { padding-top: 2rem; max-width: 780px; }
 
-    /* ── Hero banner (white text on dark green — intentional) ── */
+    /* ── Hero banner — deep botanical luxury ── */
     .hero {
-        background: linear-gradient(135deg, #1a472a 0%, #2d5f3f 60%, #3a7d52 100%);
-        border-radius: 14px;
-        padding: 2.5rem 2rem 2rem 2rem;
-        margin-bottom: 1.8rem;
+        background:
+            radial-gradient(ellipse at 20% 80%, rgba(201, 169, 110, 0.08) 0%, transparent 50%),
+            radial-gradient(ellipse at 80% 20%, rgba(201, 169, 110, 0.06) 0%, transparent 50%),
+            radial-gradient(circle at 60% 100%, rgba(43, 106, 79, 0.25) 0%, transparent 40%),
+            linear-gradient(160deg, #061A0E 0%, #0D2818 25%, #143D2B 50%, #1B4332 75%, #2D6A4F 100%);
+        border-radius: 16px;
+        padding: 3rem 2.2rem 2.2rem 2.2rem;
+        margin-bottom: 2rem;
         text-align: center;
-        box-shadow: 0 4px 20px rgba(45, 95, 63, 0.3);
+        box-shadow:
+            0 8px 32px rgba(6, 26, 14, 0.45),
+            0 2px 8px rgba(0, 0, 0, 0.15),
+            inset 0 1px 0 rgba(201, 169, 110, 0.08);
+        border: 1px solid rgba(201, 169, 110, 0.12);
+        position: relative;
+        overflow: hidden;
+    }
+    .hero::before {
+        content: '';
+        position: absolute;
+        bottom: 0;
+        left: 0;
+        right: 0;
+        height: 3px;
+        background: linear-gradient(90deg,
+            transparent 0%,
+            rgba(201, 169, 110, 0.5) 20%,
+            #C9A96E 50%,
+            rgba(201, 169, 110, 0.5) 80%,
+            transparent 100%);
     }
     .hero * { color: white !important; }
-    .hero-logo { font-size: 2.8rem; margin-bottom: 0.3rem; }
+    .hero-logo { font-size: 3.2rem; margin-bottom: 0.5rem; filter: drop-shadow(0 2px 4px rgba(0,0,0,0.3)); }
     .hero-brand {
-        font-size: 0.85rem;
-        font-weight: 600;
-        letter-spacing: 0.18em;
+        font-size: 0.8rem;
+        font-weight: 500;
+        letter-spacing: 0.25em;
         text-transform: uppercase;
-        color: #a8d5b5 !important;
-        margin-bottom: 0.5rem;
+        color: #C9A96E !important;
+        margin-bottom: 0.6rem;
     }
     .hero-title {
-        font-size: 2rem;
+        font-size: 2.1rem;
         font-weight: 700;
-        color: white !important;
-        margin: 0 0 0.6rem 0;
+        color: #FAFAF8 !important;
+        margin: 0 0 0.7rem 0;
         line-height: 1.2;
+        letter-spacing: -0.01em;
+        text-shadow: 0 2px 12px rgba(0, 0, 0, 0.25);
     }
     .hero-sub {
-        font-size: 0.97rem;
-        color: #c8e6d2 !important;
+        font-size: 0.95rem;
+        color: #A8C5B0 !important;
         max-width: 520px;
         margin: 0 auto;
-        line-height: 1.6;
+        line-height: 1.7;
+        font-weight: 300;
     }
 
     /* ── Upload label ── */
     .upload-label {
-        font-size: 0.75rem;
+        font-size: 0.72rem;
         font-weight: 700;
-        letter-spacing: 0.12em;
+        letter-spacing: 0.15em;
         text-transform: uppercase;
-        color: #2d5f3f !important;
+        color: #8B7340 !important;
         margin-bottom: 0.5rem;
     }
 
-    /* ── Upload area — force dark text inside ── */
+    /* ── Upload area ── */
     [data-testid="stFileUploader"] {
-        border: 2px dashed #5a9e72 !important;
-        border-radius: 10px !important;
-        background: #f9fcfa !important;
+        border: 2px dashed #81A88E !important;
+        border-radius: 12px !important;
+        background: #FAFAF8 !important;
         padding: 0.5rem !important;
+        transition: all 0.25s ease !important;
+    }
+    [data-testid="stFileUploader"]:hover {
+        border-color: #2D6A4F !important;
+        background: #F0EDE6 !important;
+        box-shadow: 0 2px 12px rgba(45, 106, 79, 0.1) !important;
     }
     [data-testid="stFileUploader"] * { color: #1a1a1a !important; }
-    [data-testid="stFileUploader"] small { color: #555555 !important; }
+    [data-testid="stFileUploader"] small { color: #5A554F !important; }
     [data-testid="stFileUploaderDropzoneInstructions"] { color: #1a1a1a !important; }
     [data-testid="stFileUploaderDropzoneInstructions"] * { color: #333333 !important; }
 
-    /* ── Buttons ── */
+    /* ── Buttons — emerald with gold hover ── */
     .stButton > button {
-        background: linear-gradient(135deg, #2d5f3f, #3a7d52) !important;
-        color: white !important;
+        background: linear-gradient(145deg, #143D2B, #1B6B42, #1B4332) !important;
+        color: #FAFAF8 !important;
         font-weight: 600 !important;
-        border: none !important;
-        padding: 0.7rem 2.2rem !important;
-        border-radius: 8px !important;
+        border: 1px solid rgba(201, 169, 110, 0.15) !important;
+        padding: 0.75rem 2.2rem !important;
+        border-radius: 10px !important;
         font-size: 1rem !important;
-        transition: all 0.2s !important;
-        box-shadow: 0 2px 8px rgba(45, 95, 63, 0.3) !important;
+        transition: all 0.3s ease !important;
+        box-shadow: 0 3px 12px rgba(20, 61, 43, 0.35) !important;
         width: 100% !important;
+        letter-spacing: 0.02em !important;
     }
     .stButton > button:hover {
-        background: linear-gradient(135deg, #1a472a, #2d5f3f) !important;
-        box-shadow: 0 4px 14px rgba(45, 95, 63, 0.45) !important;
+        background: linear-gradient(145deg, #0D2818, #143D2B, #1B4332) !important;
+        box-shadow:
+            0 6px 20px rgba(20, 61, 43, 0.4),
+            0 0 0 1px rgba(201, 169, 110, 0.25) !important;
         transform: translateY(-1px) !important;
+        border-color: rgba(201, 169, 110, 0.3) !important;
     }
     .stButton > button:disabled {
-        background: #b0c8b8 !important;
-        color: #ffffff !important;
+        background: #B8B2A2 !important;
+        color: #FAFAF8 !important;
         box-shadow: none !important;
         transform: none !important;
+        border-color: transparent !important;
+        opacity: 0.75 !important;
     }
 
-    /* ── Download button ── */
+    /* ── Download button — premium gold glow ── */
     [data-testid="stDownloadButton"] > button {
-        background: linear-gradient(135deg, #1a472a, #2d5f3f) !important;
-        color: white !important;
+        background: linear-gradient(145deg, #0D2818, #143D2B, #1B4332) !important;
+        color: #FAFAF8 !important;
         font-weight: 700 !important;
         font-size: 1.05rem !important;
-        padding: 0.85rem !important;
-        border-radius: 10px !important;
-        box-shadow: 0 4px 16px rgba(45, 95, 63, 0.4) !important;
-        border: none !important;
+        padding: 0.9rem !important;
+        border-radius: 12px !important;
+        box-shadow:
+            0 6px 24px rgba(13, 40, 24, 0.4),
+            0 0 0 1px rgba(201, 169, 110, 0.2) !important;
+        border: 1px solid rgba(201, 169, 110, 0.2) !important;
         width: 100% !important;
+        letter-spacing: 0.03em !important;
+        transition: all 0.3s ease !important;
     }
     [data-testid="stDownloadButton"] > button:hover {
-        background: linear-gradient(135deg, #0f2d1a, #1a472a) !important;
-        transform: translateY(-1px) !important;
+        background: linear-gradient(145deg, #061A0E, #0D2818, #143D2B) !important;
+        transform: translateY(-2px) !important;
+        box-shadow:
+            0 8px 28px rgba(13, 40, 24, 0.5),
+            0 0 0 1px rgba(201, 169, 110, 0.35),
+            0 0 20px rgba(201, 169, 110, 0.08) !important;
+        border-color: rgba(201, 169, 110, 0.35) !important;
     }
 
     /* ── File info box ── */
     .file-info {
-        background: #eef7f1;
-        border-left: 4px solid #2d5f3f;
-        padding: 0.75rem 1.1rem;
-        border-radius: 6px;
-        margin: 0.6rem 0;
+        background: linear-gradient(135deg, #EBF3ED, #F0EDE6);
+        border-left: 4px solid #C9A96E;
+        padding: 0.85rem 1.2rem;
+        border-radius: 8px;
+        margin: 0.7rem 0;
         font-size: 0.93rem;
-        color: #1a3d28 !important;
+        color: #143D2B !important;
+        box-shadow: 0 1px 4px rgba(0, 0, 0, 0.06);
     }
 
     /* ── Status steps ── */
@@ -168,35 +217,54 @@ st.markdown("""
     [data-testid="stStatusWidget"] * { color: #1a1a1a !important; }
 
     /* ── Success box ── */
-    [data-testid="stAlert"] { border-radius: 8px !important; }
+    [data-testid="stAlert"] {
+        border-radius: 10px !important;
+        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06) !important;
+    }
     [data-testid="stAlert"] p { color: #1a1a1a !important; }
 
-    /* ── Footer ── */
+    /* ── Footer — gold accent ── */
     .footer {
         text-align: center;
         font-size: 0.78rem;
-        color: #4a7a5a !important;
-        padding: 1.5rem 0 0.5rem 0;
-        border-top: 1px solid #c0d8c8;
-        margin-top: 2rem;
+        color: #5A554F !important;
+        padding: 1.8rem 0 0.6rem 0;
+        border-top: 1px solid #D4C9B5;
+        margin-top: 2.5rem;
     }
+    .footer strong { color: #143D2B !important; }
+    .footer .gold { color: #8B7340 !important; }
 
-    /* ── Step pills ── */
+    /* ── Step pills — gold-accented ── */
     .step-row {
         display: flex;
-        gap: 0.5rem;
+        gap: 0.6rem;
         justify-content: center;
-        margin: 1rem 0 0.5rem 0;
+        margin: 1.2rem 0 0.5rem 0;
         flex-wrap: wrap;
     }
     .step-pill {
-        background: rgba(255,255,255,0.18);
-        border: 1px solid rgba(255,255,255,0.35);
-        color: white !important;
+        background: rgba(201, 169, 110, 0.1);
+        border: 1px solid rgba(201, 169, 110, 0.35);
+        color: #C9A96E !important;
         border-radius: 20px;
-        padding: 0.25rem 0.85rem;
-        font-size: 0.78rem;
+        padding: 0.3rem 0.95rem;
+        font-size: 0.76rem;
         font-weight: 500;
+        letter-spacing: 0.02em;
+        transition: all 0.2s ease;
+    }
+    .step-pill:hover {
+        background: rgba(201, 169, 110, 0.18);
+        border-color: rgba(201, 169, 110, 0.5);
+    }
+
+    /* ── Divider accent ── */
+    .gold-divider {
+        height: 1px;
+        background: linear-gradient(90deg, transparent 0%, #C9A96E 50%, transparent 100%);
+        margin: 1.5rem 0;
+        opacity: 0.4;
     }
 </style>
 """, unsafe_allow_html=True)
@@ -206,15 +274,15 @@ st.markdown("""
 <div class="hero">
     <div class="hero-logo">🌿</div>
     <div class="hero-brand">VoLo Earth Ventures</div>
-    <div class="hero-title">Due Diligence Report Generator <span style="font-size:0.6em;opacity:0.7">V2</span></div>
+    <div class="hero-title">Due Diligence Report Generator</div>
     <div class="hero-sub">
         Upload a pitch deck and receive an IC-ready report surfacing unverified claims,
         competitive landscape, and outcome magnitude — powered by Claude AI.
     </div>
     <div class="step-row">
-        <span class="step-pill">📄 Extract</span>
-        <span class="step-pill">🔬 Analyze + Benchmark</span>
-        <span class="step-pill">📑 Generate Report</span>
+        <span class="step-pill">Extract</span>
+        <span class="step-pill">Analyze + Benchmark</span>
+        <span class="step-pill">Generate Report</span>
     </div>
 </div>
 """, unsafe_allow_html=True)
@@ -369,13 +437,15 @@ if "pdf_bytes" in st.session_state:
     )
 
 # ── Footer ────────────────────────────────────────────────────────────────────
+st.markdown('<div class="gold-divider"></div>', unsafe_allow_html=True)
 st.markdown("""
 <div class="footer">
-    🌿 <strong>VoLo Earth Ventures</strong> &nbsp;·&nbsp;
-    Due Diligence Report Generator V2 &nbsp;·&nbsp;
-    Powered by Claude AI &nbsp;·&nbsp;
-    No investment recommendation is made by this tool.
+    🌿 <strong>VoLo Earth Ventures</strong> &nbsp;<span class="gold">·</span>&nbsp;
+    Due Diligence Report Generator &nbsp;<span class="gold">·</span>&nbsp;
+    Powered by Claude AI
     <br style="margin-bottom:0.3rem;">
+    <span style="font-size:0.72rem; opacity:0.7;">No investment recommendation is made by this tool.</span>
+    <br style="margin-bottom:0.2rem;">
     Built by <strong>Jack Zawadzki</strong>
 </div>
 """, unsafe_allow_html=True)
