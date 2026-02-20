@@ -165,13 +165,27 @@ def _build_styles():
 
 # ── Figure to ReportLab Image ───────────────────────────────────────────────
 
-def _fig_to_image(fig, width=6.5*inch, height=4.0*inch) -> Image:
-    """Convert a matplotlib figure to a ReportLab Image flowable."""
+def _fig_to_image(fig, width=6.5*inch) -> Image:
+    """Convert a matplotlib figure to a ReportLab Image flowable.
+
+    Height is calculated automatically from the figure's aspect ratio
+    to prevent horizontal or vertical squishing.
+    """
     buf = io.BytesIO()
     fig.savefig(buf, format="png", dpi=150, bbox_inches="tight",
                 facecolor="white", edgecolor="none")
     plt.close(fig)
     buf.seek(0)
+
+    # Read the actual rendered image dimensions to preserve aspect ratio
+    from PIL import Image as PILImage
+    pil_img = PILImage.open(buf)
+    img_w, img_h = pil_img.size
+    buf.seek(0)
+
+    aspect = img_h / img_w
+    height = width * aspect
+
     return Image(buf, width=width, height=height)
 
 
@@ -557,18 +571,22 @@ def generate_report_pdf(analysis: dict, graph_data: dict, figs: list,
     ))
 
     # ── CHART PAGES (one per page) ───────────────────────────────────────
-    chart_titles = [
-        "Revenue Trajectory vs. Peers",
-        "Market Size — TAM & SAM",
-        "Technology Benchmark — Competitor Table",
-        "Technology Benchmark — Strip Chart",
+    # Each chart gets its own page with appropriate sizing
+    chart_configs = [
+        ("Revenue Trajectory vs. Peers",              7.0*inch, 5.0*inch),
+        ("Market Size — TAM & SAM",                   7.0*inch, 5.0*inch),
+        ("Technology Benchmark — Competitor Table",    7.0*inch, 5.5*inch),
+        ("Technology Benchmark — Strip Chart",         7.0*inch, 5.5*inch),
     ]
     for i, fig in enumerate(figs):
         story.append(PageBreak())
-        if i < len(chart_titles):
-            story.append(_p(chart_titles[i], S["heading"]))
+        if i < len(chart_configs):
+            title, w, h = chart_configs[i]
+            story.append(_p(title, S["heading"]))
             story.append(Spacer(1, 0.1 * inch))
-        story.append(_fig_to_image(fig, width=7.0*inch, height=5.5*inch))
+            story.append(_fig_to_image(fig, width=w))
+        else:
+            story.append(_fig_to_image(fig, width=7.0*inch))
 
     doc.build(story)
 
@@ -625,14 +643,18 @@ def _chart_revenue(data: dict) -> plt.Figure:
     fig, ax = plt.subplots(figsize=(10, 6.5))
     fig.patch.set_facecolor("white")
 
-    _apply_base_style(
-        ax,
-        title=f"{company} Revenue Trajectory vs. Established Peers",
-        xlabel="Year",
-        ylabel="Revenue (USD)",
-    )
-    ax.title.set_fontsize(14)
-    ax.title.set_pad(16)
+    ax.set_facecolor(VOLO_PALE)
+    ax.set_title(f"{company} Revenue Trajectory vs. Established Peers",
+                 fontsize=14, fontweight="bold", color=TEXT_DARK, pad=18)
+    ax.set_xlabel("Year", fontsize=11, color=TEXT_MID, labelpad=10)
+    ax.set_ylabel("Revenue (USD)", fontsize=11, color=TEXT_MID, labelpad=10)
+    ax.tick_params(colors=TEXT_MID, labelsize=10, pad=6)
+    ax.spines["top"].set_visible(False)
+    ax.spines["right"].set_visible(False)
+    ax.spines["left"].set_color(GRID_COLOR)
+    ax.spines["bottom"].set_color(GRID_COLOR)
+    ax.yaxis.grid(True, color=GRID_COLOR, linewidth=0.8, linestyle="--")
+    ax.set_axisbelow(True)
 
     ax.plot(years_c, rev_c, color=VOLO_GREEN, linewidth=2.8,
             linestyle="--", marker="o", markersize=6,
@@ -647,15 +669,14 @@ def _chart_revenue(data: dict) -> plt.Figure:
 
     ax.yaxis.set_major_formatter(mticker.FuncFormatter(_millions))
     ax.legend(fontsize=9, framealpha=0.9, edgecolor=GRID_COLOR)
-    ax.tick_params(axis='both', labelsize=10, pad=6)
 
     _add_ai_watermark(fig)
-    fig.tight_layout(pad=1.5)
+    fig.tight_layout(pad=1.8)
 
     if note:
         fig.text(0.5, 0.01, f"Note: {note}", ha="center",
                  fontsize=7.5, color=TEXT_MID, style="italic")
-        fig.subplots_adjust(bottom=0.12)
+        fig.subplots_adjust(bottom=0.13)
 
     return fig
 
@@ -674,14 +695,18 @@ def _chart_market(data: dict) -> plt.Figure:
     fig, ax = plt.subplots(figsize=(10, 6.5))
     fig.patch.set_facecolor("white")
 
-    _apply_base_style(
-        ax,
-        title="Market Size Over Time — TAM & SAM",
-        xlabel="Year",
-        ylabel="Market Size (USD Billions)",
-    )
-    ax.title.set_fontsize(14)
-    ax.title.set_pad(16)
+    ax.set_facecolor(VOLO_PALE)
+    ax.set_title("Market Size Over Time — TAM & SAM",
+                 fontsize=14, fontweight="bold", color=TEXT_DARK, pad=18)
+    ax.set_xlabel("Year", fontsize=11, color=TEXT_MID, labelpad=10)
+    ax.set_ylabel("Market Size (USD Billions)", fontsize=11, color=TEXT_MID, labelpad=10)
+    ax.tick_params(colors=TEXT_MID, labelsize=10, pad=6)
+    ax.spines["top"].set_visible(False)
+    ax.spines["right"].set_visible(False)
+    ax.spines["left"].set_color(GRID_COLOR)
+    ax.spines["bottom"].set_color(GRID_COLOR)
+    ax.yaxis.grid(True, color=GRID_COLOR, linewidth=0.8, linestyle="--")
+    ax.set_axisbelow(True)
 
     ax.fill_between(years, tam, alpha=0.15, color=VOLO_GREEN)
     ax.plot(years, tam, color=VOLO_GREEN, linewidth=2.5,
@@ -698,15 +723,14 @@ def _chart_market(data: dict) -> plt.Figure:
 
     ax.yaxis.set_major_formatter(mticker.FuncFormatter(_billions))
     ax.legend(fontsize=9, framealpha=0.9, edgecolor=GRID_COLOR)
-    ax.tick_params(axis='both', labelsize=10, pad=6)
 
     _add_ai_watermark(fig)
-    fig.tight_layout(pad=1.5)
+    fig.tight_layout(pad=1.8)
 
     if src_note:
         fig.text(0.5, 0.01, src_note, ha="center",
                  fontsize=7.5, color=TEXT_MID, style="italic")
-        fig.subplots_adjust(bottom=0.12)
+        fig.subplots_adjust(bottom=0.13)
 
     return fig
 
@@ -911,11 +935,11 @@ def _chart_tech_strip(data: dict) -> plt.Figure:
 
     direction = "Higher = Better" if higher_better else "Lower = Better"
     ax.set_xlabel(f"{metric_name} ({metric_unit})  [{direction}]",
-                  fontsize=11, color=TEXT_MID, labelpad=10)
+                  fontsize=11, color=TEXT_MID, labelpad=12)
     ax.set_yticks([])
     ax.set_ylabel("")
     ax.set_title(f"{company} — Technology Claim vs. Competitive Landscape",
-                 fontsize=14, fontweight="bold", color=TEXT_DARK, pad=16)
+                 fontsize=14, fontweight="bold", color=TEXT_DARK, pad=18)
 
     ax.spines["top"].set_visible(False)
     ax.spines["right"].set_visible(False)
@@ -931,34 +955,39 @@ def _chart_tech_strip(data: dict) -> plt.Figure:
     ax.legend(fontsize=9, loc="upper right", framealpha=0.9,
               edgecolor=GRID_COLOR, ncol=1, handletextpad=0.5)
 
-    # Caption line — clearly separated below x-axis
+    # Reserve generous bottom space for caption + methodology text
+    fig.tight_layout(rect=[0, 0.24, 1, 1])
+
+    # Caption line — in the reserved bottom space, well below x-axis
     n_comps = len(competitors)
     caption_parts = [f"Based on {n_comps} competitor data points."]
-    caption_parts.append("P10/P50/P90 calculated from raw competitor values (no smoothing).")
+    caption_parts.append("P10/P50/P90 from raw competitor values (no smoothing).")
     if conditions_note:
         caption_parts.append(conditions_note)
     elif not has_stage_data:
         caption_parts.append("Stage classification not available; all shown as targets.")
     caption_text = " ".join(caption_parts)
 
-    # Methodology blurb — visually distinct, below caption
-    method_text = (
-        "Methodology: The AI identified the single most important quantifiable performance metric "
-        "from the pitch deck, then performed targeted web searches to find real, sourced competitor "
-        "values for the same metric. Each data point is classified by maturity stage (production, "
-        "prototype, or target). P10/P50/P90 percentiles are computed directly from competitor "
-        "values. No simulation or statistical modeling is applied."
-    )
-
-    fig.tight_layout(pad=1.5)
-    fig.subplots_adjust(bottom=0.18)
-
-    fig.text(0.5, 0.09, caption_text,
+    fig.text(0.5, 0.17, caption_text,
              ha="center", fontsize=7.5, color=TEXT_MID, style="italic",
-             wrap=True)
-    fig.text(0.5, 0.02, method_text,
-             ha="center", fontsize=6.5, color="#888888",
-             wrap=True)
+             wrap=False)
+
+    # Methodology blurb — visually distinct, below caption, split into 3 lines
+    method_line1 = (
+        "Methodology: The AI identified the single most important quantifiable performance metric from the pitch deck,"
+    )
+    method_line2 = (
+        "then performed targeted web searches to find real, sourced competitor values for the same metric."
+    )
+    method_line3 = (
+        "Each data point is classified by maturity stage. P10/P50/P90 percentiles are computed directly. No simulation applied."
+    )
+    fig.text(0.5, 0.11, method_line1,
+             ha="center", fontsize=6.5, color="#888888")
+    fig.text(0.5, 0.07, method_line2,
+             ha="center", fontsize=6.5, color="#888888")
+    fig.text(0.5, 0.03, method_line3,
+             ha="center", fontsize=6.5, color="#888888")
 
     _add_ai_watermark(fig)
     return fig
