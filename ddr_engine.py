@@ -205,15 +205,15 @@ def _get_credibility(source: str) -> float:
 def score_claim(sources: list, data_age_months: int = 999,
                 sources_agree: bool = False, has_numbers: bool = False) -> float:
     """Calculate AI confidence score for a claim (0.0 – 1.0)."""
-    confidence = 0.50
+    confidence = 0.65
     if len(sources) >= 5:    confidence += 0.20
-    elif len(sources) >= 3:  confidence += 0.12
-    elif len(sources) == 2:  confidence += 0.08
-    elif len(sources) == 1:  confidence += 0.05
+    elif len(sources) >= 3:  confidence += 0.15
+    elif len(sources) == 2:  confidence += 0.10
+    elif len(sources) == 1:  confidence += 0.07
 
     if sources:
         avg_cred = sum(_get_credibility(s) for s in sources) / len(sources)
-        confidence += avg_cred * 0.20
+        confidence += avg_cred * 0.25
 
     if data_age_months <= 6:     confidence += 0.10
     elif data_age_months <= 12:  confidence += 0.05

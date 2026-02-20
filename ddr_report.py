@@ -767,10 +767,10 @@ def _chart_tech_distribution(data: dict) -> plt.Figure:
 
     # Stacked layout: table on top, chart below
     n_rows = len(sorted_comps) + 1  # +1 for company row
-    # Scale table height based on number of competitors
-    tbl_height_ratio = max(1.0, n_rows * 0.18)
+    # Scale table height based on number of competitors — generous spacing
+    tbl_height_ratio = max(1.5, n_rows * 0.35)
     fig, (ax_tbl, ax) = plt.subplots(
-        2, 1, figsize=(10, 5 + tbl_height_ratio * 1.5),
+        2, 1, figsize=(10, 5 + tbl_height_ratio * 1.8),
         gridspec_kw={"height_ratios": [tbl_height_ratio, 3]},
     )
     fig.patch.set_facecolor("white")
@@ -797,7 +797,11 @@ def _chart_tech_distribution(data: dict) -> plt.Figure:
         colWidths=[0.08, 0.65, 0.27],
     )
     tbl.auto_set_font_size(False)
-    tbl.set_fontsize(9)
+    tbl.set_fontsize(10)
+
+    # Row heights scale inversely with row count so the table always fills its panel
+    row_h = max(0.06, 0.45 / max(n_rows, 3))
+    header_h = row_h * 1.25
 
     for (row, col), cell in tbl.get_celld().items():
         cell.set_edgecolor("#d4e6da")
@@ -805,14 +809,14 @@ def _chart_tech_distribution(data: dict) -> plt.Figure:
         if row == 0:
             cell.set_facecolor(VOLO_GREEN)
             cell.set_text_props(color="white", fontweight="bold")
-            cell.set_height(0.07)
+            cell.set_height(header_h)
         elif row == len(tbl_data):
             cell.set_facecolor("#e8f5e9")
             cell.set_text_props(fontweight="bold", color=VOLO_GREEN)
-            cell.set_height(0.055)
+            cell.set_height(row_h)
         else:
             cell.set_facecolor("white" if row % 2 == 1 else "#f8fbf9")
-            cell.set_height(0.055)
+            cell.set_height(row_h)
 
     # ── Bottom panel: distribution curve ──
     ax.set_facecolor(VOLO_PALE)
