@@ -32,6 +32,7 @@ except ImportError:
 # ── Constants ────────────────────────────────────────────────────────────────
 
 MODEL = "claude-opus-4-6"
+BENCHMARK_MODEL = "claude-sonnet-4-20250514"  # cheaper model for structured data extraction
 
 WEB_SEARCH_TOOL = {
     "type": "web_search_20250305",
@@ -61,14 +62,15 @@ def extract_pdf(path: str) -> str:
 
 def _agentic_call(client: Anthropic, prompt: str,
                   max_tokens: int = 20000, temperature: float = 0.2,
-                  on_progress=None) -> str:
+                  on_progress=None, model: str = None) -> str:
     """
-    Run a single agentic Opus + web_search call.
+    Run a single agentic Claude + web_search call.
 
     Loops until stop_reason == "end_turn" or no tool calls remain.
     Returns the final text block from the model.
 
     on_progress: optional callback(search_count: int) for UI updates.
+    model:       override the default MODEL constant for this call.
     """
     messages = [{"role": "user", "content": prompt}]
     final_text = ""
@@ -78,7 +80,7 @@ def _agentic_call(client: Anthropic, prompt: str,
         for attempt in range(5):
             try:
                 response = client.messages.create(
-                    model=MODEL,
+                    model=model or MODEL,
                     max_tokens=max_tokens,
                     temperature=temperature,
                     tools=[WEB_SEARCH_TOOL],
@@ -609,16 +611,14 @@ ANALYTICAL RIGOR REQUIREMENTS:
   in the source field and normalize if possible, or flag it as non-comparable
 - Include the current commercially-available best-in-class value as a baseline reference
 
-WEB SEARCH STRATEGY — do at least 10-15 searches:
+WEB SEARCH STRATEGY — do 5-7 focused searches:
   1. "[company name] [metric] specifications" — find the subject company's exact claim
-  2. "[sector] [metric] comparison 2024 2025" — broad competitive landscape
-  3. "[competitor 1] [metric] roadmap target" — for each known competitor
-  4. "[sector] performance benchmarks [year]" — industry surveys and rankings
-  5. "[metric] state of the art record" — academic/lab records
-  6. "[sector] technology leaders [metric]" — identify additional competitors you may have missed
-  7. "[competitor] press release [metric]" — verify specific claims
-  8. "best [metric] commercially available [year]" — current best-in-class baseline
-  Search for as many named competitors as you can find. The goal is 8-15+ data points.
+  2. "[sector] [metric] comparison benchmark 2024 2025" — broad competitive landscape
+  3. "[sector] technology leaders [metric] performance" — identify top competitors and values
+  4. "[competitor 1] [metric]" / "[competitor 2] [metric]" — verify top 2-3 specifically
+  5. "best [metric] commercially available [year]" — current best-in-class baseline
+  Prioritize searches that return comparison tables or benchmark surveys — these give you
+  multiple data points per search. Aim for 5-10 well-sourced competitor data points.
   Do NOT guess or fabricate values. If you cannot find a reliable source, skip that competitor.
 
 METRIC SELECTION:
@@ -668,7 +668,7 @@ Return ONLY this JSON structure — no markdown, no prose:
 }
 
 IMPORTANT:
-- Return as many competitor data points as you can find with reliable sources (aim for 8-15+)
+- Return as many competitor data points as you can find with reliable sources (aim for 5-10+)
 - Do NOT include competitors where you cannot find a specific, sourced number
 - The "stage" field is critical — it separates what exists today from what is aspirational
 - All values should be normalized to the same measurement_basis where possible
@@ -695,12 +695,30 @@ def research_tech_benchmark(api_key: str, analysis: dict,
     Returns: Dict with metric_name, competitor_claims, stages, sources, etc.
     """
     client = Anthropic(api_key=api_key)
-    analysis_json = json.dumps(analysis, indent=2)[:40_000]
+
+    # Extract only what the benchmark prompt needs — keeps context small
+    # (full analysis dump was ~10K tokens; this is ~2-3K)
+    benchmark_context = {
+        "company_name": analysis.get("company_name", "Unknown"),
+        "industry": analysis.get("industry", "Unknown"),
+        "company_overview": analysis.get("company_overview", {}),
+        "technology_claims": analysis.get("technology_claims", []),
+        "peer_competitor_names": [
+            c.get("name") for c in
+            analysis.get("competitive_landscape", {}).get("peer_competitors", [])
+        ],
+        "market_leader_names": [
+            c.get("name") for c in
+            analysis.get("competitive_landscape", {}).get("market_leaders", [])
+        ],
+    }
+    analysis_json = json.dumps(benchmark_context, indent=2)
     prompt = _BENCHMARK_PROMPT + analysis_json
 
     raw_text = _agentic_call(
         client, prompt,
         max_tokens=8000, temperature=0.1,
         on_progress=on_progress,
+        model=BENCHMARK_MODEL,
     )
     return _extract_json(raw_text)
