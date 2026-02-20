@@ -148,20 +148,14 @@ def _build_styles():
         "alert": ParagraphStyle(
             'Alert', parent=base['BodyText'],
             fontSize=11, leading=16, spaceAfter=12,
-            textColor=colors.HexColor('#8B0000'),
-            backColor=colors.HexColor('#FFE4E1'), borderPadding=8,
         ),
         "flag": ParagraphStyle(
             'Flag', parent=base['BodyText'],
             fontSize=11, leading=16, spaceAfter=12,
-            textColor=colors.HexColor('#5c3d00'),
-            backColor=colors.HexColor('#FFF8E1'), borderPadding=8,
         ),
         "verified": ParagraphStyle(
             'Verified', parent=base['BodyText'],
             fontSize=11, leading=16, spaceAfter=12,
-            textColor=colors.HexColor('#1a4a1a'),
-            backColor=colors.HexColor('#E8F5E9'), borderPadding=8,
         ),
     }
 
