@@ -186,21 +186,32 @@ def add_confidence_display(analysis: dict) -> dict:
     confidence in the company's claims.  This function reads those scores
     and adds star-rating strings for PDF display.
 
-    Confidence is only applied to genuine AI analytical conclusions:
-      - unverified_claims (outcome sizing, investigation assessment)
-      - bankruptcy_insolvency (legal/financial finding)
+    Confidence is displayed ONLY at the section level for:
       - outcome_magnitude scenarios (forward-looking analysis)
+      - bankruptcy_insolvency (legal/financial finding)
+
+    It is NOT displayed on individual unverified claims, technology claims,
+    market claims, peer competitors, or market leaders.
     """
 
-    def _enrich(items):
-        for item in items:
-            conf = item.get('ai_confidence')
-            if conf is not None:
-                item['ai_confidence_score'] = conf
-                item['ai_confidence_stars'] = get_stars(conf)
+    # ── Defensive cleanup: strip ai_confidence from data-reporting sections
+    # The AI may add these fields despite being told not to in the prompt.
+    _STRIP_KEYS = ('ai_confidence', 'ai_confidence_score', 'ai_confidence_stars')
 
-    # Unverified claims — AI synthesizes why unverified + sizes outcomes
-    _enrich(analysis.get('unverified_claims', []))
+    for section in ('technology_claims', 'market_claims', 'unverified_claims'):
+        for item in analysis.get(section, []):
+            for k in _STRIP_KEYS:
+                item.pop(k, None)
+
+    comp_landscape = analysis.get('competitive_landscape', {})
+    for comp in comp_landscape.get('peer_competitors', []):
+        for k in _STRIP_KEYS:
+            comp.pop(k, None)
+    for leader in comp_landscape.get('market_leaders', []):
+        for k in _STRIP_KEYS:
+            leader.pop(k, None)
+
+    # ── Enrich sections that SHOULD display confidence ──
 
     # Bankruptcy/insolvency — AI concludes legal/financial status
     status = analysis.get('company_financial_legal_status', {})

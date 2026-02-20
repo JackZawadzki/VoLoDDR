@@ -260,11 +260,8 @@ def generate_report_pdf(analysis: dict, output_path: str):
         mkt_str = _dollar(mkt_usd)
         use_style = S["flag"] if priority in ['MEDIUM', 'LOW'] else S["alert"]
 
-        score = uc.get('ai_confidence_score')
-        conf_str = f" &nbsp;| &nbsp;Confidence: {score:.0%}" if score is not None else ""
-
         story.append(_p(
-            f"<b>#{counter} [{priority}] {uc.get('claim', 'Not specified')}</b>{conf_str}<br/>"
+            f"<b>#{counter} [{priority}] {uc.get('claim', 'Not specified')}</b><br/>"
             f"<b>Why Unverified:</b> {uc.get('why_unverified', 'No independent verification found')}",
             use_style,
         ))
