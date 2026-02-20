@@ -267,12 +267,11 @@ _ANALYSIS_PROMPT = """You are conducting deep due diligence on a pitch deck. You
 3. For each unverified claim, size the potential outcome IF it turns out to be true
 4. Map the full competitive landscape at both peer scale and larger market scale
 
-THOROUGHNESS REQUIREMENTS:
-- technology_claims: minimum 6 entries covering every performance, efficiency, IP, and technical claim
-- market_claims: minimum 6 entries covering every TAM, growth rate, customer, and adoption claim
-- unverified_claims: minimum 8 entries drawn from Technology, Market, Financial, and Team categories
-- competitive_landscape.peer_competitors: minimum 3 real named companies at similar stage/scale
-- competitive_landscape.market_leaders: minimum 3 real named large incumbents or category leaders
+THOROUGHNESS GUIDANCE:
+- Include only claims that are genuinely significant — skip trivial or obvious ones
+- Focus on the claims that an investment committee would actually care about
+- For each section, include as many or as few entries as the deck warrants — some companies make 3 big claims, others make 12. Match the deck, don't pad.
+- competitive_landscape: include the most relevant peer competitors and market leaders — typically 2-4 of each, but use your judgment based on how crowded the market is
 - Do not be vague — quote claims precisely from the deck and name real companies with known valuations
 
 DATA LABELING — label every claim as:
@@ -472,14 +471,14 @@ Return comprehensive JSON:
 }}
 
 IMPORTANT:
-- Be exhaustive — hit the minimum counts above for every list
-- Every unverified claim needs 2 concrete investigation steps naming specific data sources or tests
+- Quality over quantity — include what matters, skip what doesn't
+- Every unverified claim needs 1-2 concrete investigation steps naming specific data sources or tests
 - All competitor names must be real companies with verifiable existence
 - Do not recommend whether to invest — only surface what is unverified and what it could mean
 
 WEB RESEARCH REQUIREMENTS:
-You have access to web_search — USE IT EXTENSIVELY before producing your final JSON.
-Do at least 8-12 searches to verify and enrich your analysis:
+You have access to web_search — use it to verify and enrich your analysis.
+Do at least 6-8 searches covering:
   - Search for the company name + "funding" / "crunchbase" / "news"
   - Search for competitor names + "revenue" / "valuation" / "market share"
   - Search for "[sector] market size TAM 2024 2025" (BloombergNEF, IEA, Grand View Research)
@@ -491,7 +490,7 @@ Do NOT guess at numbers — search for real data first. Cite what you find.
 GRAPH DATA REQUIREMENTS (the "graph_data" field):
 - graph1: Use the company's own revenue projections from the deck. For peers, use WEB SEARCH to find 2-3 real public/well-known competitors with actual revenue figures. Cite sources in the "note" field.
 - graph2: TAM/SAM should reflect real market research figures found via WEB SEARCH (IEA, BloombergNEF, Grand View, Mordor Intelligence, etc.). Cite sources in "source_note".
-- graph3: Identify the SINGLE most important quantifiable performance metric for this company's core technology (e.g. battery energy density Wh/kg, solar efficiency %, EV range miles, carbon capture cost $/ton, wind capacity MW, drug efficacy %, etc.). Use WEB SEARCH to find 5-15 real competitor claims/targets for the SAME metric around the same target year. This is for technology forecasting — mapping where the company sits in the competitive distribution.
+- graph3: Identify the SINGLE most important quantifiable performance metric for this company's core technology (e.g. battery energy density Wh/kg, solar efficiency %, EV range miles, carbon capture cost $/ton, wind capacity MW, drug efficacy %, etc.). Use WEB SEARCH to find 4-8 real competitor claims/targets for the SAME metric around the same target year. This is for technology forecasting — mapping where the company sits in the competitive distribution.
 
 After completing your web research, return the full JSON and nothing else — no markdown fences, no prose.
 """
