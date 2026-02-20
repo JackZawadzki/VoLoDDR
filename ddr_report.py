@@ -66,13 +66,31 @@ _SAFE_TAG_RE = re.compile(
     re.IGNORECASE,
 )
 
+# Regex matching HTML/XML entities we want to PRESERVE (not double-escape)
+# Matches: &amp; &lt; &gt; &nbsp; &#36; &#123; etc.
+_ENTITY_RE = re.compile(r'&(?:#\d+|#x[0-9a-fA-F]+|[a-zA-Z]+);')
+
+
+def _esc_preserving_entities(text: str) -> str:
+    """Escape text but preserve any existing HTML entities from double-escaping."""
+    # Split on entities, escape the non-entity parts, reassemble
+    parts = _ENTITY_RE.split(text)
+    entities = _ENTITY_RE.findall(text)
+    escaped = [_esc(p) for p in parts]
+    result = []
+    for i, part in enumerate(escaped):
+        result.append(part)
+        if i < len(entities):
+            result.append(entities[i])
+    return "".join(result)
+
 
 def _p(text, style) -> Paragraph:
     """
     Create a ReportLab Paragraph with auto-escaping.
 
-    Preserves known markup tags (<b>, <i>, <br/>, etc.) while escaping
-    everything else — eliminates 50+ manual _esc() calls.
+    Preserves known markup tags (<b>, <i>, <br/>, etc.) AND existing HTML
+    entities (&nbsp;, &#36;, &amp;, etc.) while escaping everything else.
     """
     if not isinstance(text, str):
         text = str(text)
@@ -81,7 +99,7 @@ def _p(text, style) -> Paragraph:
     parts = _SAFE_TAG_RE.split(text)
     tags = _SAFE_TAG_RE.findall(text)
 
-    escaped_parts = [_esc(p) for p in parts]
+    escaped_parts = [_esc_preserving_entities(p) for p in parts]
 
     # Interleave escaped parts with preserved tags
     result = []
@@ -94,7 +112,7 @@ def _p(text, style) -> Paragraph:
 
 
 def _dollar(amount_usd: float) -> str:
-    """Format a USD amount as an escaped string for ReportLab."""
+    """Format a USD amount with a dollar sign for ReportLab (entity-safe)."""
     if amount_usd >= 1e9:
         return f"&#36;{amount_usd / 1e9:.1f}B"
     elif amount_usd > 0:
