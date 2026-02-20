@@ -4,13 +4,13 @@ VoLo Earth Ventures — Due Diligence Report Generator
 Web interface for the Due Diligence Report Generator.
 
 Installation:
-    pip install streamlit anthropic pypdf reportlab python-dotenv
+    pip install streamlit anthropic pypdf reportlab python-dotenv matplotlib numpy scipy
 
 Run locally:
     streamlit run ddr_app.py
 
 Deploy (Streamlit Community Cloud):
-    1. Push this file + DDR(draft 11).py to a GitHub repo
+    1. Push ddr_app.py + ddr_engine.py + ddr_report.py to a GitHub repo
     2. Go to share.streamlit.io → New app → point at ddr_app.py
     3. Add ANTHROPIC_API_KEY in the app's Secrets settings
 
@@ -20,28 +20,27 @@ API Key (local):
 """
 
 import os
-import sys
+import io
 import tempfile
-import importlib.util
-from pathlib import Path
 from datetime import datetime
 
-import io
-
 import streamlit as st
-from anthropic import Anthropic
 from pypdf import PdfWriter, PdfReader
-from ddr_graphs import build_graphs, figures_to_pdf
 
-# ── Load the analyzer from the existing DDR file ─────────────────────────────
-_ddr_path = Path(__file__).parent / "DDR(draft 11).py"
-_spec = importlib.util.spec_from_file_location("ddr_module", _ddr_path)
-_mod = importlib.util.module_from_spec(_spec)
-_spec.loader.exec_module(_mod)
-DueDiligenceAnalyzer = _mod.DueDiligenceAnalyzer
+from ddr_engine import (
+    extract_pdf,
+    analyze,
+    extract_graph_data_fallback,
+    add_confidence_scores,
+)
+from ddr_report import (
+    generate_report_pdf,
+    build_charts,
+    save_charts_pdf,
+)
 
 # ── API key ───────────────────────────────────────────────────────────────────
-def get_api_key() -> str:
+def _get_api_key() -> str:
     try:
         return st.secrets["ANTHROPIC_API_KEY"]
     except Exception:
@@ -268,7 +267,7 @@ if uploaded_file is None:
 
 # ── Analysis ──────────────────────────────────────────────────────────────────
 if run_button and uploaded_file:
-    api_key = get_api_key()
+    api_key = _get_api_key()
     if not api_key:
         st.error(
             "No API key found. Set **ANTHROPIC_API_KEY** as an environment variable "
@@ -276,37 +275,38 @@ if run_button and uploaded_file:
         )
         st.stop()
 
-    try:
-        analyzer = DueDiligenceAnalyzer(api_key)
-    except ValueError as e:
-        st.error(str(e))
-        st.stop()
-
     with tempfile.NamedTemporaryFile(delete=False, suffix=".pdf") as tmp:
         tmp.write(uploaded_file.getbuffer())
         tmp_path = tmp.name
 
     try:
-        # ── Step 1: Extract ───────────────────────────────────────────────────
+        # ── Step 1: Extract ──────────────────────────────────────────────
         with st.status("📄 Extracting text from PDF...", expanded=True) as status:
-            pitch_text = analyzer.extract_pdf(tmp_path)
+            pitch_text = extract_pdf(tmp_path)
             char_count = len(pitch_text)
             st.write(f"✓ Extracted {char_count:,} characters")
             if char_count > 60000:
                 st.write("⚠️ Deck is large — analysis will use the first ~60,000 characters")
             status.update(label="📄 PDF extracted", state="complete")
 
-        # ── Step 2: Analyse ───────────────────────────────────────────────────
+        # ── Step 2: Analyse ──────────────────────────────────────────────
         with st.status("🔬 Running deep analysis with web research (3–6 minutes)...", expanded=True) as status:
             st.write("Searching the web for real data, verifying claims, building competitive landscape & graph data...")
-            analysis = analyzer.analyze(pitch_text)
+            search_holder = st.empty()
+            search_total = [0]
 
-            if "error" in analysis:
-                st.error(f"Analysis error: {analysis['error']}")
+            def _on_search(count):
+                search_total[0] += count
+                search_holder.write(f"🔍 Web searches performed: {search_total[0]}")
+
+            analysis_result = analyze(api_key, pitch_text, on_progress=_on_search)
+
+            if "error" in analysis_result:
+                st.error(f"Analysis error: {analysis_result['error']}")
                 st.stop()
 
-            company_name = analysis.get("company_name", "Company")
-            unverified = analysis.get("unverified_claims", [])
+            company_name = analysis_result.get("company_name", "Company")
+            unverified = analysis_result.get("unverified_claims", [])
             critical = sum(1 for c in unverified if c.get("priority") == "CRITICAL")
             high = sum(1 for c in unverified if c.get("priority") == "HIGH")
 
@@ -314,32 +314,34 @@ if run_button and uploaded_file:
             st.write(f"✓ {len(unverified)} unverified claims ({critical} critical, {high} high priority)")
             status.update(label="🔬 Analysis complete", state="complete")
 
-        # ── Step 3: Score ─────────────────────────────────────────────────────
+        # ── Step 3: Score ────────────────────────────────────────────────
         with st.status("📊 Adding confidence scores...", expanded=False) as status:
-            scored = analyzer.add_confidence_scores(analysis)
+            scored = add_confidence_scores(analysis_result)
             status.update(label="📊 Confidence scores added", state="complete")
 
-        # ── Step 4: Generate PDF ──────────────────────────────────────────────
+        # ── Step 4: Generate PDF ─────────────────────────────────────────
         with st.status("📑 Generating PDF report...", expanded=False) as status:
             timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
             safe_name = company_name.replace(" ", "_").replace("/", "-")
             output_filename = f"{safe_name}_DDR_{timestamp}.pdf"
             output_path = os.path.join(tempfile.gettempdir(), output_filename)
-            analyzer.generate_pdf(scored, output_path)
+            generate_report_pdf(scored, output_path)
             status.update(label="📑 PDF report generated", state="complete")
 
-        # ── Step 5: Generate graphs ───────────────────────────────────────────
+        # ── Step 5: Generate graphs ──────────────────────────────────────
         with st.status("📈 Generating analysis charts...", expanded=True) as status:
-            if scored.get("graph_data"):
+            graph_data = scored.get("graph_data")
+            if graph_data:
                 st.write("Graph data found in analysis (web-verified) — building charts...")
             else:
                 st.write("Graph data missing from main analysis — running Opus + web search fallback...")
-            graph_client = Anthropic(api_key=api_key)
-            figs = build_graphs(scored, graph_client)
+                graph_data = extract_graph_data_fallback(api_key, scored)
+
+            figs = build_charts(graph_data)
 
             graphs_filename = f"{safe_name}_Charts_{timestamp}.pdf"
             graphs_path = os.path.join(tempfile.gettempdir(), graphs_filename)
-            figures_to_pdf(figs, graphs_path, company_name)
+            save_charts_pdf(figs, graphs_path, company_name)
             status.update(label="📈 Charts ready", state="complete")
 
     except FileNotFoundError as e:
@@ -351,7 +353,7 @@ if run_button and uploaded_file:
     finally:
         os.unlink(tmp_path)
 
-    # ── Merge both PDFs into one ──────────────────────────────────────────────
+    # ── Merge both PDFs into one ─────────────────────────────────────────
     merger = PdfWriter()
     for path in (output_path, graphs_path):
         merger.append(PdfReader(path))
@@ -366,7 +368,7 @@ if run_button and uploaded_file:
     st.session_state["company_name"] = company_name
     st.session_state["generated_at"] = datetime.now().strftime('%B %d, %Y at %H:%M')
 
-# ── Download section (rendered from session state, survives reruns) ────────────
+# ── Download section (rendered from session state, survives reruns) ───────────
 if "merged_bytes" in st.session_state:
     st.write("")
     st.success(f"✅ Due diligence report ready — {st.session_state['company_name']}")
