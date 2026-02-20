@@ -336,12 +336,9 @@ def generate_report_pdf(analysis: dict, graph_data: dict, figs: list,
         use_style = (S["verified"] if v_status == 'VERIFIED'
                      else S["flag"] if v_status == 'PARTIALLY VERIFIED'
                      else S["alert"])
-        label = ('✅' if v_status == 'VERIFIED'
-                 else '⚠️' if v_status == 'PARTIALLY VERIFIED'
-                 else '❌')
 
         text = (
-            f"<b>[{cl_type}] {label} {cl.get('claim', 'N/A')}</b><br/>"
+            f"<b>[{cl_type}] {cl.get('claim', 'N/A')}</b><br/>"
             f"{cl.get('source_label', v_status)}"
         )
         if cl.get('sources'):
@@ -396,7 +393,7 @@ def generate_report_pdf(analysis: dict, graph_data: dict, figs: list,
                     val = cmp.get('comparable_valuation_usd') or 0
                     val_str = f" ({_dollar(val)})" if val else ""
                     story.append(_p(
-                        f"↳ <b>{cmp.get('company', 'N/A')}</b>{val_str}: "
+                        f"-&gt; <b>{cmp.get('company', 'N/A')}</b>{val_str}: "
                         f"{cmp.get('context', '')}",
                         S["body_small"],
                     ))
@@ -431,9 +428,6 @@ def generate_report_pdf(analysis: dict, graph_data: dict, figs: list,
         if if_all.get('comparable_companies'):
             details += f" &nbsp;|&nbsp; <b>Comps:</b> {', '.join(if_all['comparable_companies'])}"
         story.append(_p(details, S["body_small"]))
-        score = if_all.get('ai_confidence')
-        if score is not None:
-            story.append(_p(f"<b>AI Confidence:</b> {score:.0%}", S["body_small"]))
         story.append(Spacer(1, 0.12 * inch))
 
     if_core = magnitude.get('if_core_tech_only_verified', {})
@@ -446,16 +440,13 @@ def generate_report_pdf(analysis: dict, graph_data: dict, figs: list,
         if if_core.get('comparable_companies'):
             details += f" &nbsp;|&nbsp; <b>Comps:</b> {', '.join(if_core['comparable_companies'])}"
         story.append(_p(details, S["body_small"]))
-        score = if_core.get('ai_confidence')
-        if score is not None:
-            story.append(_p(f"<b>AI Confidence:</b> {score:.0%}", S["body_small"]))
         story.append(Spacer(1, 0.12 * inch))
 
     deps = magnitude.get('key_dependencies', [])
     if deps:
         story.append(_p("What Must Be Proven First:", S["subheading"]))
         for dep in deps:
-            story.append(_p(f"• {dep}", S["body_small"]))
+            story.append(_p(f"- {dep}", S["body_small"]))
 
     story.append(Spacer(1, 0.2 * inch))
 
@@ -478,7 +469,7 @@ def generate_report_pdf(analysis: dict, graph_data: dict, figs: list,
             outcome = uc.get('outcome_if_true') or {}
             mkt_usd = outcome.get('market_opportunity_usd') or 0
             story.append(_p(
-                f"• <b>{uc.get('claim', 'N/A')}</b> — {_dollar(mkt_usd)}",
+                f"- <b>{uc.get('claim', 'N/A')}</b> — {_dollar(mkt_usd)}",
                 S["body_small"],
             ))
 
@@ -488,8 +479,8 @@ def generate_report_pdf(analysis: dict, graph_data: dict, figs: list,
 
     story.append(Spacer(1, 0.15 * inch))
     story.append(_p(
-        f"<i><b>Methodology:</b> Analysis based on {analysis.get('sources_consulted', '?')} sources. "
-        f"AI confidence scores shown only on significant analytical conclusions. "
+        f"<i><b>Methodology:</b> Analysis based on {analysis.get('sources_consulted', '?')} sources "
+        f"including web research, financial databases, and industry reports. "
         f"No investment recommendation is made.</i><br/>"
         f"<b>Generated:</b> {datetime.now().strftime('%B %d, %Y at %H:%M:%S')}",
         S["body_small"],
@@ -577,7 +568,7 @@ def generate_report_pdf(analysis: dict, graph_data: dict, figs: list,
         if i < len(chart_titles):
             story.append(_p(chart_titles[i], S["heading"]))
             story.append(Spacer(1, 0.1 * inch))
-        story.append(_fig_to_image(fig, width=6.5*inch, height=4.5*inch))
+        story.append(_fig_to_image(fig, width=7.0*inch, height=5.5*inch))
 
     doc.build(story)
 
@@ -631,7 +622,7 @@ def _chart_revenue(data: dict) -> plt.Figure:
     peers = g["peers"]
     note = g.get("note", "")
 
-    fig, ax = plt.subplots(figsize=(9, 5))
+    fig, ax = plt.subplots(figsize=(10, 6.5))
     fig.patch.set_facecolor("white")
 
     _apply_base_style(
@@ -640,6 +631,8 @@ def _chart_revenue(data: dict) -> plt.Figure:
         xlabel="Year",
         ylabel="Revenue (USD)",
     )
+    ax.title.set_fontsize(14)
+    ax.title.set_pad(16)
 
     ax.plot(years_c, rev_c, color=VOLO_GREEN, linewidth=2.8,
             linestyle="--", marker="o", markersize=6,
@@ -654,13 +647,16 @@ def _chart_revenue(data: dict) -> plt.Figure:
 
     ax.yaxis.set_major_formatter(mticker.FuncFormatter(_millions))
     ax.legend(fontsize=9, framealpha=0.9, edgecolor=GRID_COLOR)
-
-    if note:
-        fig.text(0.5, -0.04, f"Note: {note}", ha="center",
-                 fontsize=7.5, color=TEXT_MID, style="italic")
+    ax.tick_params(axis='both', labelsize=10, pad=6)
 
     _add_ai_watermark(fig)
-    fig.tight_layout()
+    fig.tight_layout(pad=1.5)
+
+    if note:
+        fig.text(0.5, 0.01, f"Note: {note}", ha="center",
+                 fontsize=7.5, color=TEXT_MID, style="italic")
+        fig.subplots_adjust(bottom=0.12)
+
     return fig
 
 
@@ -675,7 +671,7 @@ def _chart_market(data: dict) -> plt.Figure:
     sam_lbl = g.get("sam_label", "Serviceable Market (SAM)")
     src_note = g.get("source_note", "")
 
-    fig, ax = plt.subplots(figsize=(9, 5))
+    fig, ax = plt.subplots(figsize=(10, 6.5))
     fig.patch.set_facecolor("white")
 
     _apply_base_style(
@@ -684,6 +680,8 @@ def _chart_market(data: dict) -> plt.Figure:
         xlabel="Year",
         ylabel="Market Size (USD Billions)",
     )
+    ax.title.set_fontsize(14)
+    ax.title.set_pad(16)
 
     ax.fill_between(years, tam, alpha=0.15, color=VOLO_GREEN)
     ax.plot(years, tam, color=VOLO_GREEN, linewidth=2.5,
@@ -694,19 +692,22 @@ def _chart_market(data: dict) -> plt.Figure:
             marker="s", markersize=5, linestyle="--", label=sam_lbl)
 
     ax.annotate(f"  ${tam[-1]:.0f}B", xy=(years[-1], tam[-1]),
-                fontsize=8.5, color=VOLO_GREEN, fontweight="bold", va="center")
+                fontsize=9, color=VOLO_GREEN, fontweight="bold", va="center")
     ax.annotate(f"  ${sam[-1]:.1f}B", xy=(years[-1], sam[-1]),
-                fontsize=8.5, color=ACCENT_BLUE, fontweight="bold", va="center")
+                fontsize=9, color=ACCENT_BLUE, fontweight="bold", va="center")
 
     ax.yaxis.set_major_formatter(mticker.FuncFormatter(_billions))
     ax.legend(fontsize=9, framealpha=0.9, edgecolor=GRID_COLOR)
-
-    if src_note:
-        fig.text(0.5, -0.04, src_note, ha="center",
-                 fontsize=7.5, color=TEXT_MID, style="italic")
+    ax.tick_params(axis='both', labelsize=10, pad=6)
 
     _add_ai_watermark(fig)
-    fig.tight_layout()
+    fig.tight_layout(pad=1.5)
+
+    if src_note:
+        fig.text(0.5, 0.01, src_note, ha="center",
+                 fontsize=7.5, color=TEXT_MID, style="italic")
+        fig.subplots_adjust(bottom=0.12)
+
     return fig
 
 
@@ -842,7 +843,7 @@ def _chart_tech_strip(data: dict) -> plt.Figure:
     all_values = d["all_values"]
     p10, p50, p90 = d["p10"], d["p50"], d["p90"]
 
-    fig, ax = plt.subplots(figsize=(10, 6))
+    fig, ax = plt.subplots(figsize=(10, 7))
     fig.patch.set_facecolor("white")
     ax.set_facecolor("white")
 
@@ -910,11 +911,11 @@ def _chart_tech_strip(data: dict) -> plt.Figure:
 
     direction = "Higher = Better" if higher_better else "Lower = Better"
     ax.set_xlabel(f"{metric_name} ({metric_unit})  [{direction}]",
-                  fontsize=11, color=TEXT_MID)
+                  fontsize=11, color=TEXT_MID, labelpad=10)
     ax.set_yticks([])
     ax.set_ylabel("")
     ax.set_title(f"{company} — Technology Claim vs. Competitive Landscape",
-                 fontsize=13, fontweight="bold", color=TEXT_DARK, pad=12)
+                 fontsize=14, fontweight="bold", color=TEXT_DARK, pad=16)
 
     ax.spines["top"].set_visible(False)
     ax.spines["right"].set_visible(False)
@@ -930,21 +931,36 @@ def _chart_tech_strip(data: dict) -> plt.Figure:
     ax.legend(fontsize=9, loc="upper right", framealpha=0.9,
               edgecolor=GRID_COLOR, ncol=1, handletextpad=0.5)
 
+    # Caption line — clearly separated below x-axis
     n_comps = len(competitors)
-    note_parts = [f"Based on {n_comps} competitor data points."]
-    note_parts.append("P10/P50/P90 from raw values (no smoothing).")
+    caption_parts = [f"Based on {n_comps} competitor data points."]
+    caption_parts.append("P10/P50/P90 calculated from raw competitor values (no smoothing).")
     if conditions_note:
-        note_parts.append(conditions_note)
+        caption_parts.append(conditions_note)
     elif not has_stage_data:
-        note_parts.append("Stage classification not available; all shown as targets.")
-    methodology_text = " ".join(note_parts)
-    fig.text(0.5, 0.01, methodology_text,
+        caption_parts.append("Stage classification not available; all shown as targets.")
+    caption_text = " ".join(caption_parts)
+
+    # Methodology blurb — visually distinct, below caption
+    method_text = (
+        "Methodology: The AI identified the single most important quantifiable performance metric "
+        "from the pitch deck, then performed targeted web searches to find real, sourced competitor "
+        "values for the same metric. Each data point is classified by maturity stage (production, "
+        "prototype, or target). P10/P50/P90 percentiles are computed directly from competitor "
+        "values. No simulation or statistical modeling is applied."
+    )
+
+    fig.tight_layout(pad=1.5)
+    fig.subplots_adjust(bottom=0.18)
+
+    fig.text(0.5, 0.09, caption_text,
              ha="center", fontsize=7.5, color=TEXT_MID, style="italic",
+             wrap=True)
+    fig.text(0.5, 0.02, method_text,
+             ha="center", fontsize=6.5, color="#888888",
              wrap=True)
 
     _add_ai_watermark(fig)
-    fig.tight_layout()
-    fig.subplots_adjust(bottom=0.08)
     return fig
 
 

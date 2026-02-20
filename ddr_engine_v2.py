@@ -223,8 +223,7 @@ Return comprehensive JSON:
         "bankruptcy_insolvency": {{
             "status": "ACTIVE / IN ADMINISTRATION / BANKRUPTCY / NONE FOUND",
             "details": "Specific details if found",
-            "sources": ["Court records", "News articles"],
-            "ai_confidence": 0.90
+            "sources": ["Court records", "News articles"]
         }},
         "recent_funding": {{
             "last_round": "Series A / €15M round / etc",
@@ -321,15 +320,13 @@ Return comprehensive JSON:
             "addressable_market_usd": 50000000000,
             "realistic_market_share_pct": 5,
             "comparable_companies": ["Real Company A", "Real Company B"],
-            "framing": "If the technology and market claims are accurate, this company could compete with [X] in the [Y] market",
-            "ai_confidence": 0.80
+            "framing": "If the technology and market claims are accurate, this company could compete with [X] in the [Y] market"
         }},
         "if_core_tech_only_verified": {{
             "description": "1 paragraph: outcome if just the core technology works",
             "addressable_market_usd": 5000000000,
             "comparable_companies": ["Real smaller comp"],
-            "framing": "Even with a smaller market, proven tech alone positions this similarly to [X]",
-            "ai_confidence": 0.85
+            "framing": "Even with a smaller market, proven tech alone positions this similarly to [X]"
         }},
         "key_dependencies": ["Specific dependency 1", "Specific dependency 2"]
     }},
@@ -395,19 +392,6 @@ Return comprehensive JSON:
         }}
     }}
 }}
-
-AI CONFIDENCE SCORING:
-Only outcome_magnitude scenarios and bankruptcy_insolvency receive ai_confidence (0.0-1.0).
-This is YOUR confidence in YOUR OWN analytical conclusion, NOT confidence in the company's claim.
-Do NOT add ai_confidence to claims, competitors, or unverified_claims.
-
-Scoring guidance:
-- 0.90-1.00: Multiple authoritative sources directly confirm your assessment
-- 0.82-0.89: Strong evidence from reputable sources
-- 0.75-0.81: Good evidence with some extrapolation
-- 0.65-0.74: Moderate evidence; notable assumptions
-- Below 0.65: Genuinely fabricating with no real evidence
-Vary scores based on actual evidence quality.
 
 WEB RESEARCH REQUIREMENTS:
 You have access to web_search — use it to verify and enrich your analysis.
