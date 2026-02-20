@@ -4,7 +4,7 @@ VoLo Earth Ventures — Due Diligence Report Generator
 Web interface for the Due Diligence Report Generator.
 
 Installation:
-    pip install streamlit anthropic pypdf reportlab python-dotenv matplotlib numpy scipy
+    pip install streamlit anthropic pypdf reportlab python-dotenv matplotlib numpy
 
 Run locally:
     streamlit run ddr_app.py
@@ -32,6 +32,7 @@ from ddr_engine import (
     analyze,
     extract_graph_data_fallback,
     add_confidence_scores,
+    research_tech_benchmark,
 )
 from ddr_report import (
     generate_report_pdf,
@@ -328,7 +329,21 @@ if run_button and uploaded_file:
             generate_report_pdf(scored, output_path)
             status.update(label="📑 PDF report generated", state="complete")
 
-        # ── Step 5: Generate graphs ──────────────────────────────────────
+        # ── Step 5: Technology benchmark research ──────────────────────
+        with st.status("🔬 Researching technology benchmark (2–4 minutes)...", expanded=True) as status:
+            st.write("Running dedicated web research for competitive technology benchmark...")
+            benchmark_holder = st.empty()
+            benchmark_total = [0]
+
+            def _on_benchmark(count):
+                benchmark_total[0] += count
+                benchmark_holder.write(f"🔍 Benchmark searches performed: {benchmark_total[0]}")
+
+            benchmark_data = research_tech_benchmark(api_key, scored, on_progress=_on_benchmark)
+            st.write(f"✓ Benchmark complete — {len(benchmark_data.get('competitor_claims', []))} competitors found")
+            status.update(label="🔬 Technology benchmark complete", state="complete")
+
+        # ── Step 6: Generate graphs ──────────────────────────────────────
         with st.status("📈 Generating analysis charts...", expanded=True) as status:
             graph_data = scored.get("graph_data")
             if graph_data:
@@ -336,6 +351,9 @@ if run_button and uploaded_file:
             else:
                 st.write("Graph data missing from main analysis — running Opus + web search fallback...")
                 graph_data = extract_graph_data_fallback(api_key, scored)
+
+            # Merge benchmark data as graph3
+            graph_data["graph3"] = benchmark_data
 
             figs = build_charts(graph_data)
 

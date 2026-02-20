@@ -8,7 +8,8 @@ Handles:
   - Agentic Claude Opus + web_search analysis
   - JSON parsing with recovery
   - Confidence scoring
-  - Graph data fallback extraction
+  - Graph data fallback extraction (graph1 + graph2)
+  - Dedicated technology benchmark research (graph3)
 
 All Opus API calls go through one shared _agentic_call() function.
 """
@@ -459,23 +460,6 @@ Return comprehensive JSON:
             "tam_label": "Global [Sector] Market",
             "sam_label": "Serviceable Market ([sub-niche])",
             "source_note": "Source: [IEA, BloombergNEF, Grand View Research, etc.]"
-        }},
-        "graph3": {{
-            "metric_name": "The single most important quantifiable performance metric for this technology",
-            "metric_unit": "unit (e.g. miles, %, Wh/kg, $/ton, MW, Gbps)",
-            "target_year": 2030,
-            "company_claim": 500,
-            "competitor_claims": [
-                {{"name": "Competitor A", "value": 400, "source": "Source"}},
-                {{"name": "Competitor B", "value": 450, "source": "Source"}},
-                {{"name": "Competitor C", "value": 520, "source": "Source"}},
-                {{"name": "Competitor D", "value": 435, "source": "Source"}},
-                {{"name": "Competitor E", "value": 470, "source": "Source"}}
-            ],
-            "higher_is_better": true,
-            "current_best_in_class": 350,
-            "current_best_source": "Source for current best",
-            "rationale": "Why this metric was chosen as the key performance indicator"
         }}
     }}
 }}
@@ -500,7 +484,7 @@ Do NOT guess at numbers — search for real data first. Cite what you find.
 GRAPH DATA REQUIREMENTS (the "graph_data" field):
 - graph1: Use the company's own revenue projections from the deck. For peers, use WEB SEARCH to find 2-3 real public/well-known competitors with actual revenue figures. Cite sources in the "note" field.
 - graph2: TAM/SAM should reflect real market research figures found via WEB SEARCH (IEA, BloombergNEF, Grand View, Mordor Intelligence, etc.). Cite sources in "source_note".
-- graph3: Identify the SINGLE most important quantifiable performance metric for this company's core technology (e.g. battery energy density Wh/kg, solar efficiency %, EV range miles, carbon capture cost $/ton, wind capacity MW, drug efficacy %, etc.). Use WEB SEARCH to find 4-8 real competitor claims/targets for the SAME metric around the same target year. This is for technology forecasting — mapping where the company sits in the competitive distribution.
+- NOTE: graph3 (technology benchmark) is handled by a separate dedicated research call — do NOT include it here.
 
 After completing your web research, return the full JSON and nothing else — no markdown fences, no prose.
 """
@@ -509,7 +493,7 @@ After completing your web research, return the full JSON and nothing else — no
 # ── Graph Data Fallback Prompt ───────────────────────────────────────────────
 
 _GRAPH_EXTRACTION_PROMPT = """
-You are building structured numerical data for three investment analysis charts.
+You are building structured numerical data for two investment analysis charts.
 You have access to web_search — use it extensively to find real, verified numbers.
 
 STEP 1 — Read the due diligence analysis provided at the end of this prompt.
@@ -533,28 +517,7 @@ CHART DATA TO PRODUCE:
    - Use WEB SEARCH to find real market research figures (BloombergNEF, IEA, Grand View,
      Mordor Intelligence, etc.). Cite the source in source_note.
 
-3. TECHNOLOGY PERFORMANCE CLAIMS DISTRIBUTION
-   This chart maps the subject company's key performance claim against the full
-   competitive landscape. The goal is technology forecasting — answering:
-   "Is their claim credible relative to what everyone else is targeting?"
-
-   Steps:
-   a) Identify the SINGLE most important, quantifiable performance metric for this
-      company's technology (examples: EV range in miles, solar cell efficiency %,
-      battery energy density Wh/kg, carbon capture cost $/ton, wind turbine capacity MW,
-      drug efficacy rate %, chip transistor density, data throughput Gbps, etc.).
-   b) Find the subject company's specific claim/target for that metric and the
-      year they claim to achieve it (the "target_year").
-   c) Use WEB SEARCH extensively (at least 4-6 searches) to find as many competitor
-      and industry claims/targets for the SAME metric around the SAME target year as
-      possible. Search for "[metric] targets 2030", "[sector] performance benchmarks",
-      "[competitor] [metric] roadmap", etc. You need at least 5 competitor data points,
-      ideally 8-15+.
-   d) Return ALL the raw data points so we can build the distribution.
-
-   IMPORTANT: The metric should be whatever is most relevant to the company's core
-   value proposition — it could be efficiency, cost, range, speed, density, yield,
-   or any other measurable performance claim. Pick the ONE metric that matters most.
+NOTE: graph3 (technology benchmark) is handled by a separate dedicated call — do NOT include it.
 
 Return this exact JSON structure:
 {
@@ -584,23 +547,6 @@ Return this exact JSON structure:
     "tam_label": "Global [Sector] Market",
     "sam_label": "Serviceable Market ([sub-niche])",
     "source_note": "Source: [actual sources found via search, e.g. BloombergNEF 2024]"
-  },
-  "graph3": {
-    "metric_name": "EV Range",
-    "metric_unit": "miles",
-    "target_year": 2030,
-    "company_claim": 500,
-    "competitor_claims": [
-      {"name": "Honda", "value": 400, "source": "Honda EV roadmap 2024"},
-      {"name": "Toyota", "value": 450, "source": "Toyota bZ press release"},
-      {"name": "Tesla", "value": 520, "source": "Tesla investor day 2024"},
-      {"name": "BMW", "value": 435, "source": "BMW Neue Klasse announcement"},
-      {"name": "BYD", "value": 470, "source": "BYD Blade battery roadmap"}
-    ],
-    "higher_is_better": true,
-    "current_best_in_class": 350,
-    "current_best_source": "EPA ratings 2024",
-    "rationale": "Metric chosen because range is the primary differentiator..."
   }
 }
 
@@ -635,12 +581,128 @@ def analyze(api_key: str, pitch_text: str, on_progress=None) -> dict:
 def extract_graph_data_fallback(api_key: str, analysis: dict,
                                 on_progress=None) -> dict:
     """
-    Fallback: extract graph data via a separate Opus + web_search call.
+    Fallback: extract graph1+graph2 data via a separate Opus + web_search call.
     Used only when analysis["graph_data"] is missing.
     """
     client = Anthropic(api_key=api_key)
     analysis_json = json.dumps(analysis, indent=2)[:40_000]
     prompt = _GRAPH_EXTRACTION_PROMPT + analysis_json
+
+    raw_text = _agentic_call(
+        client, prompt,
+        max_tokens=8000, temperature=0.1,
+        on_progress=on_progress,
+    )
+    return _extract_json(raw_text)
+
+
+# ── Technology Benchmark — Dedicated Research Call ──────────────────────────
+
+_BENCHMARK_PROMPT = """You are a technology analyst building a rigorous competitive benchmark.
+Your task: identify the SINGLE most important quantifiable performance metric for a company's
+core technology, then use extensive web research to build a comprehensive, well-sourced dataset
+of competitor values for that exact metric.
+
+ANALYTICAL RIGOR REQUIREMENTS:
+- Every data point must have a named source (press release, investor deck, technical paper, etc.)
+- Classify each data point by maturity stage:
+    "production" — commercially shipping in products today
+    "target" — announced roadmap goal, not yet achieved
+    "prototype" — demonstrated in lab, pilot plant, or pre-commercial testing
+- Specify the measurement basis so values are comparable (e.g., "cell-level Wh/kg, pouch format"
+  or "EPA-rated miles" or "STC efficiency %" or "levelized cost $/MWh")
+- If a competitor's number uses different conditions (e.g., pack-level vs cell-level), note that
+  in the source field and normalize if possible, or flag it as non-comparable
+- Include the current commercially-available best-in-class value as a baseline reference
+
+WEB SEARCH STRATEGY — do at least 10-15 searches:
+  1. "[company name] [metric] specifications" — find the subject company's exact claim
+  2. "[sector] [metric] comparison 2024 2025" — broad competitive landscape
+  3. "[competitor 1] [metric] roadmap target" — for each known competitor
+  4. "[sector] performance benchmarks [year]" — industry surveys and rankings
+  5. "[metric] state of the art record" — academic/lab records
+  6. "[sector] technology leaders [metric]" — identify additional competitors you may have missed
+  7. "[competitor] press release [metric]" — verify specific claims
+  8. "best [metric] commercially available [year]" — current best-in-class baseline
+  Search for as many named competitors as you can find. The goal is 8-15+ data points.
+  Do NOT guess or fabricate values. If you cannot find a reliable source, skip that competitor.
+
+METRIC SELECTION:
+Read the due diligence analysis below. Identify the company's core technology value proposition.
+Pick the ONE quantitative metric that most directly measures their competitive advantage.
+Examples: battery energy density (Wh/kg), solar cell efficiency (%), EV range (miles),
+carbon capture cost ($/ton CO2), wind turbine capacity (MW), drug response rate (%),
+chip transistor density (nm), data throughput (Gbps), electrolyzer efficiency (kWh/kg H2),
+etc. The metric must be something the company explicitly claims a specific number for.
+
+Return ONLY this JSON structure — no markdown, no prose:
+{
+  "metric_name": "Gravimetric Energy Density",
+  "metric_unit": "Wh/kg",
+  "measurement_basis": "Cell-level, pouch format, room temperature",
+  "target_year": 2028,
+  "company_name": "Subject Company",
+  "company_claim": 500,
+  "company_claim_stage": "target",
+  "company_claim_source": "Pitch deck / investor presentation",
+  "competitor_claims": [
+    {
+      "name": "CATL",
+      "value": 500,
+      "source": "CATL Condensed Battery press release, April 2023",
+      "stage": "prototype"
+    },
+    {
+      "name": "Samsung SDI",
+      "value": 400,
+      "source": "Samsung SDI Investor Day 2024 presentation",
+      "stage": "production"
+    },
+    {
+      "name": "BYD",
+      "value": 180,
+      "source": "BYD Blade Battery specs, company website",
+      "stage": "production"
+    }
+  ],
+  "higher_is_better": true,
+  "current_best_in_class": 350,
+  "current_best_source": "BloombergNEF battery survey 2024",
+  "conditions_note": "All values are cell-level gravimetric energy density unless noted. Production = shipping in commercial products. Target = announced roadmap/goal. Prototype = demonstrated in lab or pilot.",
+  "rationale": "Energy density is the primary differentiator for next-gen batteries, directly determining EV range and cost competitiveness.",
+  "sources_searched": 12
+}
+
+IMPORTANT:
+- Return as many competitor data points as you can find with reliable sources (aim for 8-15+)
+- Do NOT include competitors where you cannot find a specific, sourced number
+- The "stage" field is critical — it separates what exists today from what is aspirational
+- All values should be normalized to the same measurement_basis where possible
+- If a value is not directly comparable (different test conditions), note this in the source field
+
+Here is the due diligence analysis to base your benchmark on:
+"""
+
+
+def research_tech_benchmark(api_key: str, analysis: dict,
+                            on_progress=None) -> dict:
+    """
+    Dedicated web research call to build a rigorous technology benchmark.
+
+    Runs a separate Claude + web_search call focused entirely on finding
+    comparable, well-sourced competitor data points for the company's key
+    performance metric. Returns graph3-compatible data dict.
+
+    Args:
+        api_key:     Anthropic API key.
+        analysis:    The main analysis dict (used for context).
+        on_progress: Optional callback(search_count: int) for UI updates.
+
+    Returns: Dict with metric_name, competitor_claims, stages, sources, etc.
+    """
+    client = Anthropic(api_key=api_key)
+    analysis_json = json.dumps(analysis, indent=2)[:40_000]
+    prompt = _BENCHMARK_PROMPT + analysis_json
 
     raw_text = _agentic_call(
         client, prompt,

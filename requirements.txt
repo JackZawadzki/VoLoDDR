@@ -5,4 +5,3 @@ reportlab
 python-dotenv
 matplotlib
 numpy
-scipy

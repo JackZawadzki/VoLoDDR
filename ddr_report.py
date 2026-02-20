@@ -730,76 +730,83 @@ def _chart_market(data: dict) -> plt.Figure:
     return fig
 
 
-# ── Chart 3: Technology performance claims distribution ──────────────────────
+# ── Chart 3: Technology benchmark — strip chart with stage markers ────────────
+
+# Stage classification: marker shape + color for each maturity level
+_STAGE_STYLE = {
+    "production": {"marker": "o", "color": ACCENT_BLUE,   "label": "Production"},
+    "target":     {"marker": "^", "color": ACCENT_ORANGE,  "label": "Target / Roadmap"},
+    "prototype":  {"marker": "D", "color": ACCENT_PURPLE, "label": "Prototype / Lab"},
+}
+_STAGE_LABELS = {"production": "Prod.", "target": "Target", "prototype": "Proto."}
+
 
 def _chart_tech_distribution(data: dict) -> plt.Figure:
-    from scipy.stats import gaussian_kde
-
     g = data["graph3"]
-    company = data["company_name"]
+    company = data.get("company_name", g.get("company_name", "Company"))
     metric_name = g["metric_name"]
     metric_unit = g["metric_unit"]
     target_year = g.get("target_year", "")
     company_val = g["company_claim"]
+    company_stage = g.get("company_claim_stage", "target")
     competitors = g["competitor_claims"]
     higher_better = g.get("higher_is_better", True)
     current_best = g.get("current_best_in_class")
+    conditions_note = g.get("conditions_note", "")
+    measurement_basis = g.get("measurement_basis", "")
+
+    # Backward compatibility: add default stage if missing
+    has_stage_data = any("stage" in c for c in competitors)
+    for c in competitors:
+        if "stage" not in c:
+            c["stage"] = "target"
 
     comp_values = [c["value"] for c in competitors]
     all_values = comp_values + [company_val]
     sorted_comps = sorted(competitors, key=lambda c: c["value"], reverse=higher_better)
 
-    # KDE on competitor claims
-    if len(comp_values) >= 2:
-        kde = gaussian_kde(comp_values, bw_method="silverman")
-        x_pad = (max(all_values) - min(all_values)) * 0.35
-        x_lo = min(all_values) - x_pad
-        x_hi = max(all_values) + x_pad
-        x_range = np.linspace(x_lo, x_hi, 500)
-        density = kde(x_range)
-    else:
-        x_range = np.array([])
-        density = np.array([])
-
-    p10 = np.percentile(comp_values, 10)
+    # Percentiles from raw competitor data (no smoothing)
+    p10 = np.percentile(comp_values, 10) if len(comp_values) >= 3 else None
     p50 = np.percentile(comp_values, 50)
-    p90 = np.percentile(comp_values, 90)
+    p90 = np.percentile(comp_values, 90) if len(comp_values) >= 3 else None
 
-    # Stacked layout: table on top, chart below
+    # ── Layout: table on top, strip chart below ──
     n_rows = len(sorted_comps) + 1  # +1 for company row
-    # Scale table height based on number of competitors — generous spacing
     tbl_height_ratio = max(1.5, n_rows * 0.35)
     fig, (ax_tbl, ax) = plt.subplots(
-        2, 1, figsize=(10, 5 + tbl_height_ratio * 1.8),
-        gridspec_kw={"height_ratios": [tbl_height_ratio, 3]},
+        2, 1, figsize=(10, 4.5 + tbl_height_ratio * 1.8),
+        gridspec_kw={"height_ratios": [tbl_height_ratio, 2.5]},
     )
     fig.patch.set_facecolor("white")
 
-    # ── Top panel: competitor table ──
+    # ── Top panel: competitor table with Stage column ──
     ax_tbl.axis("off")
     year_str = f" (Target ~{target_year})" if target_year else ""
-    ax_tbl.set_title(f"Competitor Claims — {metric_name} ({metric_unit}){year_str}",
-                     fontsize=11, fontweight="bold", color=TEXT_DARK, pad=8)
+    basis_str = f" — {measurement_basis}" if measurement_basis else ""
+    ax_tbl.set_title(
+        f"Technology Benchmark — {metric_name} ({metric_unit}){year_str}{basis_str}",
+        fontsize=11, fontweight="bold", color=TEXT_DARK, pad=8,
+    )
 
     tbl_data = []
     for i, c in enumerate(sorted_comps):
-        name = c["name"]
-        if len(name) > 35:
-            name = name[:33] + "…"
-        tbl_data.append([str(i + 1), name, f"{c['value']:.4g}"])
-    tbl_data.append(["★", company[:33], f"{company_val:.4g}"])
+        name = c["name"][:30] if len(c["name"]) > 30 else c["name"]
+        stage_lbl = _STAGE_LABELS.get(c.get("stage", "target"), "Target")
+        src = c.get("source", "")[:35]
+        tbl_data.append([str(i + 1), name, f"{c['value']:.4g}", stage_lbl, src])
+    company_stage_lbl = _STAGE_LABELS.get(company_stage, "Target")
+    tbl_data.append(["*", company[:30], f"{company_val:.4g}", company_stage_lbl, "Pitch deck"])
 
     tbl = ax_tbl.table(
         cellText=tbl_data,
-        colLabels=["#", "Company", metric_unit],
+        colLabels=["#", "Company", metric_unit, "Stage", "Source"],
         loc="upper center",
         cellLoc="left",
-        colWidths=[0.08, 0.65, 0.27],
+        colWidths=[0.05, 0.30, 0.15, 0.12, 0.38],
     )
     tbl.auto_set_font_size(False)
-    tbl.set_fontsize(10)
+    tbl.set_fontsize(9)
 
-    # Row heights scale inversely with row count so the table always fills its panel
     row_h = max(0.06, 0.45 / max(n_rows, 3))
     header_h = row_h * 1.25
 
@@ -818,72 +825,120 @@ def _chart_tech_distribution(data: dict) -> plt.Figure:
             cell.set_facecolor("white" if row % 2 == 1 else "#f8fbf9")
             cell.set_height(row_h)
 
-    # ── Bottom panel: distribution curve ──
-    ax.set_facecolor(VOLO_PALE)
+    # ── Bottom panel: strip chart ──
+    ax.set_facecolor("white")
 
-    if len(x_range) > 0:
-        ax.fill_between(x_range, density, alpha=0.18, color=ACCENT_BLUE)
-        ax.plot(x_range, density, color=ACCENT_BLUE, linewidth=2, alpha=0.7)
+    # Plot competitor data points grouped by stage
+    for stage_key, style in _STAGE_STYLE.items():
+        stage_comps = [c for c in competitors if c.get("stage", "target") == stage_key]
+        if not stage_comps:
+            continue
+        x_vals = [c["value"] for c in stage_comps]
+        # Slight vertical jitter to separate overlapping points
+        n = len(stage_comps)
+        y_vals = [(i - (n - 1) / 2) * 0.06 for i in range(n)]
+        ax.scatter(
+            x_vals, y_vals,
+            marker=style["marker"], color=style["color"],
+            s=90, zorder=10, edgecolors="white", linewidths=0.8,
+            label=style["label"],
+        )
+        # Alternating label positions to avoid overlap
+        for idx, (c, yv) in enumerate(zip(stage_comps, y_vals)):
+            offset_y = 9 if idx % 2 == 0 else -12
+            va = "bottom" if idx % 2 == 0 else "top"
+            ax.annotate(
+                c["name"], (c["value"], yv),
+                textcoords="offset points", xytext=(0, offset_y),
+                fontsize=7, color=TEXT_MID, ha="center", va=va,
+            )
 
-    # Rug ticks
-    for c in competitors:
-        ax.plot(c["value"], 0, marker="|", markersize=10, color="#5b7ea8",
-                zorder=8, markeredgewidth=1.5)
+    # Company claim — prominent star marker
+    ax.scatter(
+        [company_val], [0],
+        marker="*", color=VOLO_GREEN, s=280, zorder=15,
+        edgecolors="white", linewidths=1.0,
+        label=f"{company} (claim)",
+    )
+    ax.annotate(
+        f"{company}: {company_val:.4g} {metric_unit}",
+        (company_val, 0),
+        textcoords="offset points", xytext=(0, -16),
+        fontsize=9, fontweight="bold", color=VOLO_GREEN,
+        ha="center", va="top",
+        bbox=dict(boxstyle="round,pad=0.3", facecolor="white",
+                  edgecolor=VOLO_GREEN, linewidth=1.5, alpha=0.95),
+    )
 
-    y_top = max(density) if len(density) > 0 else 1
+    # P10 / P50 / P90 reference lines (from raw competitor data, no smoothing)
+    y_lo, y_hi = ax.get_ylim()
+    pct_lines = []
+    if p10 is not None:
+        pct_lines.append((p10, "#c0392b", "P10"))
+    pct_lines.append((p50, TEXT_MID, "P50 (median)"))
+    if p90 is not None:
+        pct_lines.append((p90, ACCENT_ORANGE, "P90"))
 
-    # Percentile lines
-    pct_label_heights = [0.92, 0.78, 0.64]
-    line_cfg = [
-        (p10, "#c0392b", "P10"),
-        (p50, VOLO_GREEN, "P50"),
-        (p90, ACCENT_ORANGE, "P90"),
-    ]
-    for (val, color, label), y_frac in zip(line_cfg, pct_label_heights):
-        ax.axvline(val, color=color, linewidth=1.5, linestyle="--", alpha=0.6, zorder=5)
-        ax.text(val, y_top * y_frac, f" {label}: {val:.4g}",
-                fontsize=7.5, color=color, fontweight="bold", va="center",
+    for val, color, label in pct_lines:
+        ax.axvline(val, color=color, linewidth=1.2, linestyle="--", alpha=0.5, zorder=3)
+        ax.text(val, y_hi * 0.85, f"{label}: {val:.4g}",
+                fontsize=7.5, color=color, fontweight="bold", ha="center",
                 bbox=dict(boxstyle="round,pad=0.2", facecolor="white",
                           edgecolor=color, alpha=0.85))
 
-    # Company claim line
-    ax.axvline(company_val, color=VOLO_GREEN, linewidth=2.8, linestyle="-", zorder=9)
-    ax.text(company_val, y_top * 1.08,
-            f"  {company}: {company_val:.4g} {metric_unit}",
-            ha="left", va="bottom", fontsize=9, color=VOLO_GREEN,
-            fontweight="bold",
-            bbox=dict(boxstyle="round,pad=0.3", facecolor="white",
-                      edgecolor=VOLO_GREEN, linewidth=2, alpha=0.95))
-
-    # Current best marker
+    # Current best-in-class reference line
     if current_best is not None:
-        ax.axvline(current_best, color="#888888", linewidth=1.3, linestyle=":",
-                   zorder=4, alpha=0.6)
-        ax.text(current_best, y_top * 0.50,
-                f" Best today: {current_best:.4g}",
-                fontsize=7, color="#666666", va="center",
+        ax.axvline(current_best, color="#888888", linewidth=1.2, linestyle=":",
+                   alpha=0.6, zorder=3)
+        ax.text(current_best, y_lo * 0.8,
+                f"Best today: {current_best:.4g}",
+                fontsize=7, color="#666666", ha="center",
                 bbox=dict(boxstyle="round,pad=0.2", facecolor="#f5f5f5",
                           edgecolor="#bbbbbb", alpha=0.85))
 
+    # Axis styling — clean and minimal
     direction = "Higher = Better" if higher_better else "Lower = Better"
-
-    _apply_base_style(
-        ax,
-        title=f"{company} — Tech Claims vs. Competitors",
-        xlabel=f"{metric_name} ({metric_unit})  [{direction}]",
-        ylabel="",
-    )
+    ax.set_xlabel(f"{metric_name} ({metric_unit})  [{direction}]",
+                  fontsize=10, color=TEXT_MID)
     ax.set_yticks([])
-    ax.set_ylim(bottom=-0.08 * y_top, top=y_top * 1.25)
+    ax.set_ylabel("")
+    ax.set_title(f"{company} — Technology Claim vs. Competitive Landscape",
+                 fontsize=12, fontweight="bold", color=TEXT_DARK, pad=10)
 
+    # Clean spines
+    ax.spines["top"].set_visible(False)
+    ax.spines["right"].set_visible(False)
+    ax.spines["left"].set_visible(False)
+    ax.spines["bottom"].set_color(GRID_COLOR)
+
+    # X-axis padding
+    x_pad = (max(all_values) - min(all_values)) * 0.15
+    ax.set_xlim(min(all_values) - x_pad, max(all_values) + x_pad)
+
+    # Subtle vertical grid
+    ax.xaxis.grid(True, color=GRID_COLOR, linewidth=0.5, linestyle="--", alpha=0.5)
+    ax.set_axisbelow(True)
+
+    # Legend
+    ax.legend(fontsize=8, loc="upper right", framealpha=0.9,
+              edgecolor=GRID_COLOR, ncol=1, handletextpad=0.5)
+
+    # Methodology note
     n_comps = len(competitors)
-    fig.text(0.5, 0.01,
-             f"Distribution of {n_comps} competitor claims · P10/P50/P90 of landscape shown",
-             ha="center", fontsize=7.5, color=TEXT_MID, style="italic")
+    note_parts = [f"Based on {n_comps} competitor data points."]
+    note_parts.append("P10/P50/P90 from raw values (no smoothing).")
+    if conditions_note:
+        note_parts.append(conditions_note)
+    elif not has_stage_data:
+        note_parts.append("Stage classification not available; all shown as targets.")
+    methodology_text = " ".join(note_parts)
+    fig.text(0.5, 0.01, methodology_text,
+             ha="center", fontsize=7, color=TEXT_MID, style="italic",
+             wrap=True)
 
     _add_ai_watermark(fig)
     fig.tight_layout()
-    fig.subplots_adjust(hspace=0.25, bottom=0.06, top=0.94)
+    fig.subplots_adjust(hspace=0.30, bottom=0.07, top=0.94)
     return fig
 
 
@@ -909,6 +964,7 @@ def build_charts(graph_data: dict) -> list:
 
     Args:
         graph_data: Dict with keys company_name, sector, graph1, graph2, graph3.
+                    graph3 comes from a dedicated research_tech_benchmark() call.
 
     Returns:
         [fig1, fig2, fig3] — ready for st.pyplot() or PDF embedding.
