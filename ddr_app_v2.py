@@ -96,13 +96,9 @@ st.markdown("""
         to   { opacity: 1; transform: translateY(0) scale(1); }
     }
 
-    /* ── Botanical background pattern (subtle vine/leaf SVG) ── */
     .stApp {
         background-color: #F5F1EB;
         color: #1a1a1a;
-        background-image: url("data:image/svg+xml,%3Csvg width='200' height='200' viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M40 15 Q50 35 38 50 Q26 65 32 82 Q38 100 28 118' fill='none' stroke='%23287D45' stroke-width='1' opacity='0.09'/%3E%3Cpath d='M38 50 Q46 44 50 49' fill='none' stroke='%23287D45' stroke-width='0.8' opacity='0.09'/%3E%3Cpath d='M32 82 Q24 76 21 80' fill='none' stroke='%23287D45' stroke-width='0.8' opacity='0.09'/%3E%3Cellipse cx='38' cy='50' rx='5' ry='7' transform='rotate(-25 38 50)' fill='%23287D45' opacity='0.055'/%3E%3Cellipse cx='32' cy='82' rx='4.5' ry='6.5' transform='rotate(20 32 82)' fill='%23287D45' opacity='0.045'/%3E%3Cpath d='M150 25 Q142 48 152 65 Q162 80 155 100 Q148 118 156 138' fill='none' stroke='%23287D45' stroke-width='1' opacity='0.08'/%3E%3Cpath d='M152 65 Q160 58 163 63' fill='none' stroke='%23287D45' stroke-width='0.8' opacity='0.08'/%3E%3Cpath d='M155 100 Q147 94 144 98' fill='none' stroke='%23287D45' stroke-width='0.8' opacity='0.08'/%3E%3Cellipse cx='152' cy='65' rx='5' ry='7' transform='rotate(15 152 65)' fill='%23287D45' opacity='0.045'/%3E%3Cellipse cx='155' cy='100' rx='4' ry='6' transform='rotate(-18 155 100)' fill='%23287D45' opacity='0.04'/%3E%3Cpath d='M95 160 Q100 175 92 185' fill='none' stroke='%23287D45' stroke-width='0.8' opacity='0.06'/%3E%3Cellipse cx='95' cy='170' rx='4' ry='5.5' transform='rotate(-10 95 170)' fill='%23287D45' opacity='0.04'/%3E%3C/svg%3E");
-        background-repeat: repeat;
-        background-size: 200px 200px;
     }
     .stApp p, .stApp label, .stApp span, .stApp div { color: #1a1a1a; }
     .stMarkdown p { color: #1a1a1a !important; }
