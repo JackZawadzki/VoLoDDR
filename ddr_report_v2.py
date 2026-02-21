@@ -570,22 +570,33 @@ def generate_report_pdf(analysis: dict, graph_data: dict, figs: list,
         src_style,
     ))
 
-    # ── CHART PAGES (one per page) ───────────────────────────────────────
-    # Each chart gets its own page with appropriate sizing
-    chart_configs = [
-        ("Revenue Trajectory vs. Peers",              7.0*inch, 5.0*inch),
-        ("Market Size — TAM & SAM",                   7.0*inch, 5.0*inch),
-        ("Technology Benchmark — Competitor Table",    7.0*inch, 5.5*inch),
-        ("Technology Benchmark — Strip Chart",         7.0*inch, 5.5*inch),
+    # ── CHART PAGES ─────────────────────────────────────────────────────
+    # Charts 1 & 2 (revenue + market) share one page; 3 & 4 get own pages
+    chart_titles = [
+        "Revenue Trajectory vs. Peers",
+        "Market Size — TAM & SAM",
+        "Technology Benchmark — Competitor Table",
+        "Technology Benchmark — Strip Chart",
     ]
     for i, fig in enumerate(figs):
-        story.append(PageBreak())
-        if i < len(chart_configs):
-            title, w, h = chart_configs[i]
-            story.append(_p(title, S["heading"]))
-            story.append(Spacer(1, 0.1 * inch))
-            story.append(_fig_to_image(fig, width=w))
+        if i == 0:
+            # First chart — start a new page
+            story.append(PageBreak())
+            story.append(_p(chart_titles[i], S["heading"]))
+            story.append(Spacer(1, 0.05 * inch))
+            story.append(_fig_to_image(fig, width=6.8*inch))
+        elif i == 1:
+            # Second chart — same page, small spacer
+            story.append(Spacer(1, 0.15 * inch))
+            story.append(_p(chart_titles[i], S["heading"]))
+            story.append(Spacer(1, 0.05 * inch))
+            story.append(_fig_to_image(fig, width=6.8*inch))
         else:
+            # Charts 3 & 4 — each on their own page
+            story.append(PageBreak())
+            if i < len(chart_titles):
+                story.append(_p(chart_titles[i], S["heading"]))
+                story.append(Spacer(1, 0.1 * inch))
             story.append(_fig_to_image(fig, width=7.0*inch))
 
     doc.build(story)
