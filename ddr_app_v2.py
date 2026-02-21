@@ -100,9 +100,9 @@ st.markdown("""
     .stApp {
         background-color: #F5F1EB;
         color: #1a1a1a;
-        background-image: url("data:image/svg+xml,%3Csvg width='120' height='120' viewBox='0 0 120 120' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M30 10 Q35 25 25 35 Q15 45 20 55 Q25 65 18 75' fill='none' stroke='%232d5f3f' stroke-width='0.5' opacity='0.04'/%3E%3Cpath d='M25 35 Q30 30 35 33' fill='none' stroke='%232d5f3f' stroke-width='0.4' opacity='0.04'/%3E%3Cpath d='M20 55 Q15 50 12 53' fill='none' stroke='%232d5f3f' stroke-width='0.4' opacity='0.04'/%3E%3Cpath d='M90 15 Q85 30 92 42 Q99 52 94 65 Q89 78 95 88' fill='none' stroke='%232d5f3f' stroke-width='0.5' opacity='0.035'/%3E%3Cpath d='M92 42 Q97 38 100 41' fill='none' stroke='%232d5f3f' stroke-width='0.4' opacity='0.035'/%3E%3Cpath d='M94 65 Q89 61 87 64' fill='none' stroke='%232d5f3f' stroke-width='0.4' opacity='0.035'/%3E%3Cellipse cx='25' cy='35' rx='3' ry='4.5' transform='rotate(-20 25 35)' fill='%232d5f3f' opacity='0.025'/%3E%3Cellipse cx='92' cy='42' rx='3' ry='4.5' transform='rotate(15 92 42)' fill='%232d5f3f' opacity='0.02'/%3E%3Cellipse cx='60' cy='95' rx='2.5' ry='4' transform='rotate(-10 60 95)' fill='%23C9A96E' opacity='0.02'/%3E%3C/svg%3E");
+        background-image: url("data:image/svg+xml,%3Csvg width='200' height='200' viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M40 15 Q50 35 38 50 Q26 65 32 82 Q38 100 28 118' fill='none' stroke='%23287D45' stroke-width='1' opacity='0.09'/%3E%3Cpath d='M38 50 Q46 44 50 49' fill='none' stroke='%23287D45' stroke-width='0.8' opacity='0.09'/%3E%3Cpath d='M32 82 Q24 76 21 80' fill='none' stroke='%23287D45' stroke-width='0.8' opacity='0.09'/%3E%3Cellipse cx='38' cy='50' rx='5' ry='7' transform='rotate(-25 38 50)' fill='%23287D45' opacity='0.055'/%3E%3Cellipse cx='32' cy='82' rx='4.5' ry='6.5' transform='rotate(20 32 82)' fill='%23287D45' opacity='0.045'/%3E%3Cpath d='M150 25 Q142 48 152 65 Q162 80 155 100 Q148 118 156 138' fill='none' stroke='%23287D45' stroke-width='1' opacity='0.08'/%3E%3Cpath d='M152 65 Q160 58 163 63' fill='none' stroke='%23287D45' stroke-width='0.8' opacity='0.08'/%3E%3Cpath d='M155 100 Q147 94 144 98' fill='none' stroke='%23287D45' stroke-width='0.8' opacity='0.08'/%3E%3Cellipse cx='152' cy='65' rx='5' ry='7' transform='rotate(15 152 65)' fill='%23287D45' opacity='0.045'/%3E%3Cellipse cx='155' cy='100' rx='4' ry='6' transform='rotate(-18 155 100)' fill='%23287D45' opacity='0.04'/%3E%3Cpath d='M95 160 Q100 175 92 185' fill='none' stroke='%23287D45' stroke-width='0.8' opacity='0.06'/%3E%3Cellipse cx='95' cy='170' rx='4' ry='5.5' transform='rotate(-10 95 170)' fill='%23287D45' opacity='0.04'/%3E%3C/svg%3E");
         background-repeat: repeat;
-        background-size: 120px 120px;
+        background-size: 200px 200px;
     }
     .stApp p, .stApp label, .stApp span, .stApp div { color: #1a1a1a; }
     .stMarkdown p { color: #1a1a1a !important; }
@@ -171,8 +171,7 @@ st.markdown("""
     .hero-logo {
         font-size: 3.2rem;
         margin-bottom: 0.5rem;
-        animation: logoFloat 4s ease-in-out infinite;
-        display: inline-block;
+        filter: drop-shadow(0 2px 4px rgba(0,0,0,0.3));
     }
     .hero-brand {
         font-size: 0.8rem;
