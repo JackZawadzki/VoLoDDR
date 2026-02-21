@@ -165,26 +165,23 @@ def _build_styles():
 
 # ── Figure to ReportLab Image ───────────────────────────────────────────────
 
-def _fig_to_image(fig, width=6.5*inch) -> Image:
+def _fig_to_image(fig, width=6.5*inch, min_height=3.5*inch) -> Image:
     """Convert a matplotlib figure to a ReportLab Image flowable.
 
-    Height is calculated automatically from the figure's aspect ratio
-    to prevent horizontal or vertical squishing.
+    Uses the figure's own figsize to compute the aspect ratio, avoiding
+    bbox_inches='tight' which aggressively crops whitespace and can make
+    charts render tiny.
     """
+    # Get aspect ratio from the figure's own dimensions (set via figsize)
+    fig_w, fig_h = fig.get_size_inches()
+    aspect = fig_h / fig_w
+    height = max(width * aspect, min_height)
+
     buf = io.BytesIO()
-    fig.savefig(buf, format="png", dpi=150, bbox_inches="tight",
+    fig.savefig(buf, format="png", dpi=150,
                 facecolor="white", edgecolor="none")
     plt.close(fig)
     buf.seek(0)
-
-    # Read the actual rendered image dimensions to preserve aspect ratio
-    from PIL import Image as PILImage
-    pil_img = PILImage.open(buf)
-    img_w, img_h = pil_img.size
-    buf.seek(0)
-
-    aspect = img_h / img_w
-    height = width * aspect
 
     return Image(buf, width=width, height=height)
 
@@ -570,8 +567,7 @@ def generate_report_pdf(analysis: dict, graph_data: dict, figs: list,
         src_style,
     ))
 
-    # ── CHART PAGES ─────────────────────────────────────────────────────
-    # Charts 1 & 2 (revenue + market) share one page; 3 & 4 get own pages
+    # ── CHART PAGES — one chart per page, full size ─────────────────────
     chart_titles = [
         "Revenue Trajectory vs. Peers",
         "Market Size — TAM & SAM",
@@ -579,25 +575,11 @@ def generate_report_pdf(analysis: dict, graph_data: dict, figs: list,
         "Technology Benchmark — Strip Chart",
     ]
     for i, fig in enumerate(figs):
-        if i == 0:
-            # First chart — start a new page
-            story.append(PageBreak())
+        story.append(PageBreak())
+        if i < len(chart_titles):
             story.append(_p(chart_titles[i], S["heading"]))
-            story.append(Spacer(1, 0.05 * inch))
-            story.append(_fig_to_image(fig, width=6.8*inch))
-        elif i == 1:
-            # Second chart — same page, small spacer
-            story.append(Spacer(1, 0.15 * inch))
-            story.append(_p(chart_titles[i], S["heading"]))
-            story.append(Spacer(1, 0.05 * inch))
-            story.append(_fig_to_image(fig, width=6.8*inch))
-        else:
-            # Charts 3 & 4 — each on their own page
-            story.append(PageBreak())
-            if i < len(chart_titles):
-                story.append(_p(chart_titles[i], S["heading"]))
-                story.append(Spacer(1, 0.1 * inch))
-            story.append(_fig_to_image(fig, width=7.0*inch))
+            story.append(Spacer(1, 0.1 * inch))
+        story.append(_fig_to_image(fig, width=7.0*inch, min_height=5.0*inch))
 
             # After strip chart (chart 4): add caption + methodology as PDF text
             if i == 3:
