@@ -599,6 +599,37 @@ def generate_report_pdf(analysis: dict, graph_data: dict, figs: list,
                 story.append(Spacer(1, 0.1 * inch))
             story.append(_fig_to_image(fig, width=7.0*inch))
 
+            # After strip chart (chart 4): add caption + methodology as PDF text
+            if i == 3:
+                caption_style = ParagraphStyle(
+                    'ChartCaption', parent=S["body_small"],
+                    fontSize=8, leading=10, spaceAfter=4, spaceBefore=8,
+                    textColor=colors.HexColor('#4a4a4a'), alignment=TA_CENTER,
+                )
+                method_style = ParagraphStyle(
+                    'ChartMethod', parent=S["body_small"],
+                    fontSize=7.5, leading=10, spaceAfter=2, spaceBefore=2,
+                    textColor=colors.HexColor('#888888'), alignment=TA_CENTER,
+                )
+                story.append(_p(
+                    "<i>P10/P50/P90 percentiles are calculated directly from the "
+                    "raw competitor values collected above. No smoothing or simulation "
+                    "is applied.</i>",
+                    caption_style,
+                ))
+                story.append(_p(
+                    "<b>Methodology:</b> The AI identified the single most important "
+                    "quantifiable performance metric from the pitch deck, then performed "
+                    "targeted web searches to find real, sourced competitor values for "
+                    "the same metric. Each data point is classified by maturity stage "
+                    "(production, prototype, or target). P10 = 10th percentile (only 10% "
+                    "of competitors perform worse), P50 = median (middle value), P90 = "
+                    "90th percentile (only 10% of competitors perform better). These are "
+                    "computed using standard percentile interpolation across all collected "
+                    "competitor data points.",
+                    method_style,
+                ))
+
     doc.build(story)
 
 
@@ -966,39 +997,7 @@ def _chart_tech_strip(data: dict) -> plt.Figure:
     ax.legend(fontsize=9, loc="upper right", framealpha=0.9,
               edgecolor=GRID_COLOR, ncol=1, handletextpad=0.5)
 
-    # Reserve generous bottom space for caption + methodology text
-    fig.tight_layout(rect=[0, 0.24, 1, 1])
-
-    # Caption line — in the reserved bottom space, well below x-axis
-    n_comps = len(competitors)
-    caption_parts = [f"Based on {n_comps} competitor data points."]
-    caption_parts.append("P10/P50/P90 from raw competitor values (no smoothing).")
-    if conditions_note:
-        caption_parts.append(conditions_note)
-    elif not has_stage_data:
-        caption_parts.append("Stage classification not available; all shown as targets.")
-    caption_text = " ".join(caption_parts)
-
-    fig.text(0.5, 0.17, caption_text,
-             ha="center", fontsize=7.5, color=TEXT_MID, style="italic",
-             wrap=False)
-
-    # Methodology blurb — visually distinct, below caption, split into 3 lines
-    method_line1 = (
-        "Methodology: The AI identified the single most important quantifiable performance metric from the pitch deck,"
-    )
-    method_line2 = (
-        "then performed targeted web searches to find real, sourced competitor values for the same metric."
-    )
-    method_line3 = (
-        "Each data point is classified by maturity stage. P10/P50/P90 percentiles are computed directly. No simulation applied."
-    )
-    fig.text(0.5, 0.11, method_line1,
-             ha="center", fontsize=6.5, color="#888888")
-    fig.text(0.5, 0.07, method_line2,
-             ha="center", fontsize=6.5, color="#888888")
-    fig.text(0.5, 0.03, method_line3,
-             ha="center", fontsize=6.5, color="#888888")
+    fig.tight_layout(pad=1.5)
 
     _add_ai_watermark(fig)
     return fig
