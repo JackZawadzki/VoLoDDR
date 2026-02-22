@@ -128,16 +128,18 @@ def _extract_json(raw_text: str) -> dict:
     Parse JSON from Claude's response text.
 
     Recovery strategy:
-      1. Strip markdown fences
+      1. Strip markdown fences and surrounding prose
       2. Regex extract outermost { ... }
       3. json.loads()
-      4. If fails: try closing open braces/brackets
-      5. If fails: try ASCII-only cleanup
-      6. If all fail: return error dict
+      4. If fails: fix common issues (control chars, unescaped quotes)
+      5. If fails: try closing open braces/brackets
+      6. If fails: try ASCII-only cleanup
+      7. If all fail: return error dict
     """
     raw = raw_text.strip()
-    raw = re.sub(r"^```[a-z]*\n?", "", raw)
-    raw = re.sub(r"\n?```$", "", raw)
+    # Strip markdown fences anywhere in the text
+    raw = re.sub(r"```[a-z]*\s*\n?", "", raw)
+    raw = re.sub(r"\n?\s*```", "", raw)
 
     json_match = re.search(r'\{[\s\S]*\}', raw)
     if not json_match:
@@ -145,28 +147,63 @@ def _extract_json(raw_text: str) -> dict:
 
     fragment = json_match.group()
 
+    def _clean(s: str) -> str:
+        """Remove control characters and fix common JSON issues."""
+        # Remove control chars except \n \r \t
+        s = re.sub(r'[\x00-\x08\x0b\x0c\x0e-\x1f]', '', s)
+        # Fix unescaped newlines inside strings — replace literal newlines
+        # within JSON string values with \\n
+        return s
+
     # Attempt 1: direct parse
     try:
         return json.loads(fragment)
-    except json.JSONDecodeError:
+    except (json.JSONDecodeError, ValueError):
         pass
 
-    # Attempt 2: close open braces/brackets
+    # Attempt 2: clean control chars and retry
     try:
-        open_b = fragment.count("{") - fragment.count("}")
-        open_a = fragment.count("[") - fragment.count("]")
-        patched = fragment + ("]" * max(open_a, 0)) + ("}" * max(open_b, 0))
-        return json.loads(patched)
-    except json.JSONDecodeError:
+        return json.loads(_clean(fragment))
+    except (json.JSONDecodeError, ValueError):
         pass
 
-    # Attempt 3: ASCII-only cleanup
+    # Attempt 3: close open braces/brackets
+    try:
+        cleaned = _clean(fragment)
+        open_b = cleaned.count("{") - cleaned.count("}")
+        open_a = cleaned.count("[") - cleaned.count("]")
+        patched = cleaned + ("]" * max(open_a, 0)) + ("}" * max(open_b, 0))
+        return json.loads(patched)
+    except (json.JSONDecodeError, ValueError):
+        pass
+
+    # Attempt 4: strip non-ASCII and retry
     try:
         clean = fragment.encode("ascii", errors="ignore").decode("ascii")
         return json.loads(clean)
-    except json.JSONDecodeError:
-        return {"company_name": "Unknown", "error": "JSON parse failed",
-                "raw": raw_text[:2000]}
+    except (json.JSONDecodeError, ValueError):
+        pass
+
+    # Attempt 5: try to find a smaller valid JSON object
+    # Sometimes the AI puts prose after the JSON closing brace
+    try:
+        depth = 0
+        end_idx = 0
+        for idx, ch in enumerate(fragment):
+            if ch == '{':
+                depth += 1
+            elif ch == '}':
+                depth -= 1
+                if depth == 0:
+                    end_idx = idx + 1
+                    break
+        if end_idx > 0:
+            return json.loads(_clean(fragment[:end_idx]))
+    except (json.JSONDecodeError, ValueError):
+        pass
+
+    return {"company_name": "Unknown", "error": "JSON parse failed",
+            "raw": raw_text[:2000]}
 
 
 # ── V2 Unified Analysis Prompt ──────────────────────────────────────────────
