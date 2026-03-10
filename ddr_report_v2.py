@@ -236,6 +236,41 @@ def generate_report_pdf(analysis: dict, graph_data: dict, figs: list,
         def draw(self):
             toc_tracker[self.key] = self.canv.getPageNumber()
 
+    class _CommentaryField(Flowable):
+        """Fillable PDF form text field for team commentary."""
+        def __init__(self, field_name, label="Team Commentary:",
+                     field_width=6.5*inch, field_height=0.8*inch):
+            Flowable.__init__(self)
+            self.field_name = field_name
+            self.label = label
+            self.field_width = field_width
+            self.field_height = field_height
+            self.width = field_width
+            self.height = field_height + 16
+        def draw(self):
+            canv = self.canv
+            canv.setStrokeColor(colors.HexColor('#d4e6da'))
+            canv.setLineWidth(0.5)
+            canv.line(0, self.height, self.field_width, self.height)
+            canv.setFont('Helvetica-Bold', 8)
+            canv.setFillColor(colors.HexColor(VOLO_GREEN))
+            canv.drawString(2, self.field_height + 3, self.label)
+            canv.acroForm.textfield(
+                name=self.field_name,
+                tooltip=self.label,
+                x=0, y=0,
+                width=self.field_width,
+                height=self.field_height,
+                borderStyle='inset',
+                borderColor=colors.HexColor('#c8dcc8'),
+                fillColor=colors.HexColor('#f8fbf9'),
+                textColor=colors.black,
+                forceBorder=True,
+                relative=True,
+                fieldFlags='multiline',
+                fontSize=9,
+            )
+
     def _chart_img(idx, width=7.0*inch, min_height=5.0*inch):
         """Create a ReportLab Image from a pre-rendered chart buffer."""
         png_bytes, fw, fh = chart_renders[idx]
@@ -360,6 +395,9 @@ def generate_report_pdf(analysis: dict, graph_data: dict, figs: list,
         elif overall not in ['DISTRESSED', 'CRITICAL'] and status.get('notes'):
             story.append(_p(f"<b>Background:</b> {status['notes']}", S["body_small"]))
 
+        story.append(Spacer(1, 0.15 * inch))
+        story.append(_CommentaryField(
+            "commentary_overview", "Team Commentary \u2014 Company Overview:"))
         story.append(PageBreak())
 
         # ── TABLE OF CONTENTS PAGE ───────────────────────────────────
@@ -419,6 +457,9 @@ def generate_report_pdf(analysis: dict, graph_data: dict, figs: list,
                 S["body_small"],
             ))
 
+        story.append(Spacer(1, 0.15 * inch))
+        story.append(_CommentaryField(
+            "commentary_competitive", "Team Commentary \u2014 Competitive Landscape:"))
         story.append(PageBreak())
 
         # ── CLAIMS ASSESSMENT ────────────────────────────────────────
@@ -446,6 +487,10 @@ def generate_report_pdf(analysis: dict, graph_data: dict, figs: list,
                 text += f" — <i>{', '.join(cl['sources'][:2])}</i>"
             story.append(_p(text, use_style))
             story.append(Spacer(1, 0.04 * inch))
+
+        story.append(Spacer(1, 0.1 * inch))
+        story.append(_CommentaryField(
+            "commentary_claims", "Team Commentary \u2014 Claims Assessment:"))
 
         # ── UNVERIFIED CLAIMS (CRITICAL + HIGH only) ─────────────────
         unverified = analysis.get('unverified_claims', [])
@@ -505,7 +550,12 @@ def generate_report_pdf(analysis: dict, graph_data: dict, figs: list,
                             S["body_small"],
                         ))
 
-                story.append(Spacer(1, 0.12 * inch))
+                story.append(Spacer(1, 0.06 * inch))
+                story.append(_CommentaryField(
+                    f"commentary_unverified_{idx}",
+                    f"Team Response \u2014 Claim #{idx}:",
+                    field_height=0.6*inch))
+                story.append(Spacer(1, 0.1 * inch))
 
         story.append(PageBreak())
 
@@ -551,6 +601,9 @@ def generate_report_pdf(analysis: dict, graph_data: dict, figs: list,
             for dep in deps:
                 story.append(_p(f"- {dep}", S["body_small"]))
 
+        story.append(Spacer(1, 0.15 * inch))
+        story.append(_CommentaryField(
+            "commentary_outcome", "Team Commentary \u2014 Outcome Assessment:"))
         story.append(Spacer(1, 0.2 * inch))
 
         # ── CONCLUSION ───────────────────────────────────────────────
@@ -589,6 +642,12 @@ def generate_report_pdf(analysis: dict, graph_data: dict, figs: list,
             f"<b>Generated:</b> {datetime.now().strftime('%B %d, %Y at %H:%M:%S')}",
             S["body_small"],
         ))
+
+        story.append(Spacer(1, 0.15 * inch))
+        story.append(_CommentaryField(
+            "commentary_conclusion",
+            "Team Commentary \u2014 Final Notes & Next Steps:",
+            field_height=1.0*inch))
 
         # ── SOURCES PAGE ─────────────────────────────────────────────
         story.append(PageBreak())
