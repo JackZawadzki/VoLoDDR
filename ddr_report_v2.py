@@ -239,7 +239,7 @@ def generate_report_pdf(analysis: dict, graph_data: dict, figs: list,
     class _CommentaryField(Flowable):
         """Fillable PDF form text field for team commentary."""
         def __init__(self, field_name, label="Team Commentary:",
-                     field_width=6.5*inch, field_height=0.8*inch):
+                     field_width=6.5*inch, field_height=1.5*inch):
             Flowable.__init__(self)
             self.field_name = field_name
             self.label = label
@@ -554,7 +554,7 @@ def generate_report_pdf(analysis: dict, graph_data: dict, figs: list,
                 story.append(_CommentaryField(
                     f"commentary_unverified_{idx}",
                     f"Team Response \u2014 Claim #{idx}:",
-                    field_height=0.6*inch))
+                    field_height=1.2*inch))
                 story.append(Spacer(1, 0.1 * inch))
 
         story.append(PageBreak())
@@ -647,7 +647,7 @@ def generate_report_pdf(analysis: dict, graph_data: dict, figs: list,
         story.append(_CommentaryField(
             "commentary_conclusion",
             "Team Commentary \u2014 Final Notes & Next Steps:",
-            field_height=1.0*inch))
+            field_height=2.0*inch))
 
         # ── SOURCES PAGE ─────────────────────────────────────────────
         story.append(PageBreak())
