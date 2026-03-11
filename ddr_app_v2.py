@@ -537,11 +537,13 @@ if run_button and uploaded_file:
 
         # ── Step 3: Generate PDF with inline charts ──────────────────────
         with st.status("Generating report with charts...", expanded=False) as status:
-            # Build charts
+            # Build charts (V2.1: TAM/SAM + Hybrid Monte Carlo only)
             if graph_data:
                 figs = build_charts(graph_data)
             else:
                 figs = []
+
+            st.write(f"Charts generated: {len(figs)} (TAM/SAM + Hybrid MC)")
 
             # Generate single PDF
             timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
@@ -555,7 +557,7 @@ if run_button and uploaded_file:
             with open(output_path, "rb") as f:
                 pdf_bytes = f.read()
 
-            status.update(label="Report generated", state="complete", expanded=False)
+            status.update(label=f"Report generated — {len(figs)} charts", state="complete", expanded=False)
 
     except FileNotFoundError as e:
         st.error(f"File error: {e}")
@@ -602,6 +604,7 @@ st.markdown("""
     <br style="margin-bottom:0.3rem;">
     <span style="font-size:0.72rem; opacity:0.7;">No investment recommendation is made by this tool.</span>
     <br style="margin-bottom:0.2rem;">
-    Built by <strong>Jack Zawadzki</strong>
+    Built by <strong>Jack Zawadzki</strong> &nbsp;<span class="gold">&middot;</span>&nbsp;
+    <span style="font-size:0.65rem; opacity:0.5;">v2.1 — Hybrid MC</span>
 </div>
 """, unsafe_allow_html=True)
