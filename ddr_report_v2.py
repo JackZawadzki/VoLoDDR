@@ -797,21 +797,29 @@ def generate_report_pdf(analysis: dict, graph_data: dict, figs: list,
                         S["subheading"],
                     ))
 
-                    story.append(_p(
-                        "This projection uses a hybrid stochastic model "
-                        "combining Geometric Brownian Motion with S-curve "
-                        "saturation dynamics. A state-dependent drift "
-                        f"decays as values approach the theoretical {ll}, "
-                        "capturing how real technologies compound rapidly "
-                        "early on but slow near fundamental physical bounds. "
-                        "The simulation is stage-aware: production-validated "
-                        "values anchor the starting distribution while "
-                        f"prototype claims inform the {ll}. 5,000 runs each "
-                        "bootstrap the competitor pool and draw unique "
-                        "parameters, producing path-dependent trajectories "
-                        "that respect physical constraints.",
-                        S["body_small"],
-                    ))
+                    _METH_P1 = (
+                        "This projection uses a hybrid model that combines "
+                        "Geometric Brownian Motion with S-curve saturation "
+                        "\u2014 reflecting how real technologies improve "
+                        "rapidly in early stages but slow as they approach "
+                        "fundamental physical limits. The model is "
+                        "stage-aware: commercially validated competitor "
+                        "data anchors the starting distribution, while "
+                        "emerging prototypes and targets inform the "
+                        "theoretical limit. 5,000 independent simulations "
+                        "each resample the competitive landscape and draw "
+                        "unique parameters, generating a rich distribution "
+                        "of plausible technology trajectories."
+                    )
+                    _METH_P2 = (
+                        "The P10/P50/P90 bands represent optimistic, "
+                        "median, and conservative outcomes across all "
+                        "simulations. Projection precision improves with "
+                        "dataset breadth \u2014 as proprietary data sources "
+                        "are integrated, these confidence bands will "
+                        "narrow further."
+                    )
+                    story.append(_p(_METH_P1, S["body_small"]))
 
                     # Equation box
                     if hb:
@@ -848,16 +856,7 @@ def generate_report_pdf(analysis: dict, graph_data: dict, figs: list,
                     story.append(formula_box)
                     story.append(Spacer(1, 0.1 * inch))
 
-                    story.append(_p(
-                        "P10/P50/P90 bands capture both parameter uncertainty "
-                        "and stochastic noise across all simulations, "
-                        "providing a probabilistic envelope grounded in the "
-                        "current competitive landscape. Projection quality "
-                        "improves with dataset breadth \u2014 as additional "
-                        "proprietary data sources are integrated, confidence "
-                        "bands will narrow further.",
-                        S["body_small"],
-                    ))
+                    story.append(_p(_METH_P2, S["body_small"]))
 
         return story
 
