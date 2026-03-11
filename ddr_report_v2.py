@@ -889,6 +889,13 @@ def generate_report_pdf(analysis: dict, graph_data: dict, figs: list,
 #  PART 2 — MATPLOTLIB CHARTS (copied verbatim from V1)
 # ═══════════════════════════════════════════════════════════════════════════════
 
+def _mpl_safe(text):
+    """Escape $ signs so matplotlib doesn't interpret them as LaTeX math."""
+    if not isinstance(text, str):
+        text = str(text)
+    return text.replace("$", "\\$")
+
+
 def _add_ai_watermark(fig):
     """Add a subtle 'AI Estimates' watermark to a figure."""
     fig.text(
@@ -968,7 +975,7 @@ def _chart_revenue(data: dict) -> plt.Figure:
     fig.tight_layout(pad=1.8)
 
     if note:
-        fig.text(0.5, 0.01, f"Note: {note}", ha="center",
+        fig.text(0.5, 0.01, f"Note: {_mpl_safe(note)}", ha="center",
                  fontsize=7.5, color=TEXT_MID, style="italic")
         fig.subplots_adjust(bottom=0.13)
 
@@ -982,8 +989,8 @@ def _chart_market(data: dict) -> plt.Figure:
     years = g["years"]
     tam = g["tam_usd_b"]
     sam = g["sam_usd_b"]
-    tam_lbl = g.get("tam_label", "Global Market (TAM)")
-    sam_lbl = g.get("sam_label", "Serviceable Market (SAM)")
+    tam_lbl = _mpl_safe(g.get("tam_label", "Global Market (TAM)"))
+    sam_lbl = _mpl_safe(g.get("sam_label", "Serviceable Market (SAM)"))
     src_note = g.get("source_note", "")
 
     fig, ax = plt.subplots(figsize=(10, 6.5))
@@ -1010,9 +1017,9 @@ def _chart_market(data: dict) -> plt.Figure:
     ax.plot(years, sam, color=ACCENT_BLUE, linewidth=2.5,
             marker="s", markersize=5, linestyle="--", label=sam_lbl)
 
-    ax.annotate(f"  ${tam[-1]:.0f}B", xy=(years[-1], tam[-1]),
+    ax.annotate(f"  \\${tam[-1]:.0f}B", xy=(years[-1], tam[-1]),
                 fontsize=9, color=VOLO_GREEN, fontweight="bold", va="center")
-    ax.annotate(f"  ${sam[-1]:.1f}B", xy=(years[-1], sam[-1]),
+    ax.annotate(f"  \\${sam[-1]:.1f}B", xy=(years[-1], sam[-1]),
                 fontsize=9, color=ACCENT_BLUE, fontweight="bold", va="center")
 
     ax.yaxis.set_major_formatter(mticker.FuncFormatter(_billions))
@@ -1022,7 +1029,7 @@ def _chart_market(data: dict) -> plt.Figure:
     fig.tight_layout(pad=1.8)
 
     if src_note:
-        fig.text(0.5, 0.01, src_note, ha="center",
+        fig.text(0.5, 0.01, _mpl_safe(src_note), ha="center",
                  fontsize=7.5, color=TEXT_MID, style="italic")
         fig.subplots_adjust(bottom=0.13)
 
@@ -1390,8 +1397,12 @@ def _chart_hybrid_mc(data: dict) -> plt.Figure:
     fig.patch.set_facecolor("white")
     ax.set_facecolor(VOLO_PALE)
 
+    safe_company = _mpl_safe(company)
+    safe_unit = _mpl_safe(metric_unit)
+    safe_metric = _mpl_safe(metric_name)
+
     ax.set_title(
-        f"{company} \u2014 Hybrid GBM + S-Curve Monte Carlo",
+        f"{safe_company} \u2014 Hybrid GBM + S-Curve Monte Carlo",
         fontsize=14, fontweight="bold", color=TEXT_DARK, pad=20,
     )
 
@@ -1401,13 +1412,13 @@ def _chart_hybrid_mc(data: dict) -> plt.Figure:
         f"mu_max ~ U({hp['mu_range'][0]:.0%}, {hp['mu_range'][1]:.0%})  |  "
         f"sigma ~ U({hp['sigma_range'][0]:.0%}, {hp['sigma_range'][1]:.0%})  |  "
         f"{limit_label} ~ U({hp['limit_range'][0]:.0f}, {hp['limit_range'][1]:.0f}) "
-        f"{metric_unit}  |  bootstrapped",
+        f"{safe_unit}  |  bootstrapped",
         transform=ax.transAxes, fontsize=8, color=TEXT_MID, va="bottom",
     )
 
     ax.set_xlabel("Year", fontsize=10, color=TEXT_MID, labelpad=8)
     ax.set_ylabel(
-        f"{metric_name} ({metric_unit})", fontsize=10, color=TEXT_MID, labelpad=8,
+        f"{safe_metric} ({safe_unit})", fontsize=10, color=TEXT_MID, labelpad=8,
     )
     ax.spines["top"].set_visible(False)
     ax.spines["right"].set_visible(False)
@@ -1468,7 +1479,7 @@ def _chart_hybrid_mc(data: dict) -> plt.Figure:
         )
         plotted_stages.add(st)
         ax.annotate(
-            c["name"], (hp["base_year"], c["value"]),
+            _mpl_safe(c["name"]), (hp["base_year"], c["value"]),
             textcoords="offset points", xytext=(-8, 0),
             fontsize=6, color=TEXT_MID, ha="right", va="center", alpha=0.7,
         )
@@ -1478,7 +1489,7 @@ def _chart_hybrid_mc(data: dict) -> plt.Figure:
             markersize=22, zorder=20, markeredgecolor="white",
             markeredgewidth=1.0)
     ax.annotate(
-        f"{company} Target\n{company_val:.4g} {metric_unit}",
+        f"{safe_company} Target\n{company_val:.4g} {safe_unit}",
         (target_year, company_val),
         textcoords="offset points", xytext=(-60, -25),
         fontsize=9, fontweight="bold", color=VOLO_GREEN,
@@ -1500,7 +1511,7 @@ def _chart_hybrid_mc(data: dict) -> plt.Figure:
     ax.text(
         target_year + 0.12, L_mean + y_offset,
         f"Theoretical {limit_label} "
-        f"~{hp['limit_range'][0]:.0f}-{hp['limit_range'][1]:.0f} {metric_unit}",
+        f"~{hp['limit_range'][0]:.0f}-{hp['limit_range'][1]:.0f} {safe_unit}",
         fontsize=7, color="#999999", va=va_align, fontstyle="italic",
     )
 
