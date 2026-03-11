@@ -1267,9 +1267,10 @@ def _chart_tech_strip(data: dict) -> plt.Figure:
 def _estimate_hybrid_params(g3):
     """Estimate hybrid MC simulation parameters from graph3 competitor data.
 
-    Uses robust statistics (IQR-based) to avoid extreme outliers from lab
-    results skewing the simulation.  Clamps all parameters to physically
-    reasonable ranges so the chart always looks sensible.
+    Stage-aware estimation that mirrors the hand-tuned standalone scripts:
+    - Production values anchor the bootstrap starting pool
+    - Prototype/target values inform the theoretical ceiling
+    - Mu and sigma use tight, realistic ranges (3-12% / 6-15%)
     """
     competitors = g3.get("competitor_claims", [])
     comp_values = np.array([c["value"] for c in competitors], dtype=float)
@@ -1280,59 +1281,66 @@ def _estimate_hybrid_params(g3):
     target_year = g3.get("target_year", base_year + 3)
     if target_year <= base_year:
         target_year = base_year + 3
-    # Enforce minimum 2-year horizon so rates don't blow up
+    # Enforce minimum 2-year horizon so rates stay sensible
     horizon = max(target_year - base_year, 2)
     target_year = base_year + horizon
 
-    # ── Robust central tendency (IQR-trimmed) ──
-    q25, q50, q75 = np.percentile(comp_values, [25, 50, 75])
-    iqr = q75 - q25
-    if higher_better:
-        # Trim extreme highs (lab results) — keep up to Q75 + 1.5*IQR
-        upper_fence = q75 + 1.5 * iqr if iqr > 0 else q75 * 1.5
-        trimmed = comp_values[comp_values <= upper_fence]
-        if len(trimmed) < 3:
-            trimmed = comp_values  # not enough after trim, use all
-        best = float(np.max(trimmed))
-        # Also consider the company claim as an anchor for the ceiling
-        anchor = max(best, company_claim)
+    # ── Split by stage ──
+    prod_vals = np.array(
+        [c["value"] for c in competitors
+         if c.get("stage", "target") == "production"] or comp_values,
+        dtype=float,
+    )
+    proto_vals = np.array(
+        [c["value"] for c in competitors
+         if c.get("stage", "target") in ("prototype", "target")],
+        dtype=float,
+    )
+
+    # ── Bootstrap pool = production values (the "current market") ──
+    # If fewer than 3 production values, mix in prototypes
+    if len(prod_vals) < 3:
+        pool_values = comp_values
     else:
-        lower_fence = q25 - 1.5 * iqr if iqr > 0 else q25 * 0.5
-        trimmed = comp_values[comp_values >= lower_fence]
-        if len(trimmed) < 3:
-            trimmed = comp_values
-        best = float(np.min(trimmed))
-        anchor = min(best, company_claim)
+        pool_values = prod_vals
 
-    median_val = float(np.median(trimmed))
-    std_val = float(np.std(trimmed))
-    cv = std_val / median_val if median_val > 0 else 0.1
-
-    # ── Sigma: clamped to [0.04, 0.20] — realistic annual volatility ──
-    sigma_lo = np.clip(cv * 0.4, 0.04, 0.12)
-    sigma_hi = np.clip(cv * 1.0, 0.08, 0.20)
-    if sigma_lo >= sigma_hi:
-        sigma_lo, sigma_hi = 0.05, 0.15
-
-    # ── Mu: clamped to reasonable annual improvement rates ──
+    # ── Ceiling from best prototype/target OR modest stretch of production ──
     if higher_better:
-        ratio = best / median_val if median_val > 0 else 1.1
-        annual_rate = max(ratio ** (1.0 / horizon) - 1, 0.01)
-        mu_lo = np.clip(annual_rate * 0.3, 0.02, 0.08)
-        mu_hi = np.clip(annual_rate * 1.5, 0.05, 0.20)
-        # Ceiling: modest multiple of the anchor (best trimmed or company claim)
-        limit_lo = anchor * 1.15
-        limit_hi = anchor * 1.6
+        prod_best = float(np.max(prod_vals)) if len(prod_vals) > 0 else company_claim
+        proto_best = float(np.max(proto_vals)) if len(proto_vals) > 0 else prod_best
+        # Ceiling anchored to the better of best-prototype and company claim
+        ceiling_anchor = max(proto_best, company_claim)
+        limit_lo = ceiling_anchor * 1.1
+        limit_hi = ceiling_anchor * 1.7
     else:
-        ratio = best / median_val if median_val > 0 else 0.9
-        annual_rate = min(ratio ** (1.0 / horizon) - 1, -0.01)
-        mu_lo = np.clip(annual_rate * 1.5, -0.20, -0.05)
-        mu_hi = np.clip(annual_rate * 0.3, -0.08, -0.02)
-        limit_lo = max(anchor * 0.4, 1.0)
-        limit_hi = anchor * 0.85
+        prod_best = float(np.min(prod_vals)) if len(prod_vals) > 0 else company_claim
+        proto_best = float(np.min(proto_vals)) if len(proto_vals) > 0 else prod_best
+        ceiling_anchor = min(proto_best, company_claim)
+        limit_hi = ceiling_anchor * 0.9
+        limit_lo = max(ceiling_anchor * 0.4, 1.0)
+
+    # ── Mu: realistic annual improvement rate (3-12%) ──
+    pool_median = float(np.median(pool_values))
+    if higher_better:
+        stretch = ceiling_anchor / pool_median if pool_median > 0 else 1.2
+        annual_rate = max(stretch ** (1.0 / horizon) - 1, 0.02)
+        mu_lo = np.clip(annual_rate * 0.3, 0.03, 0.06)
+        mu_hi = np.clip(annual_rate * 1.2, 0.08, 0.15)
+    else:
+        stretch = ceiling_anchor / pool_median if pool_median > 0 else 0.8
+        annual_rate = min(stretch ** (1.0 / horizon) - 1, -0.02)
+        mu_lo = np.clip(annual_rate * 1.2, -0.15, -0.08)
+        mu_hi = np.clip(annual_rate * 0.3, -0.06, -0.03)
 
     if mu_lo >= mu_hi:
-        mu_lo, mu_hi = (0.02, 0.12) if higher_better else (-0.12, -0.02)
+        mu_lo, mu_hi = (0.03, 0.12) if higher_better else (-0.12, -0.03)
+
+    # ── Sigma: realistic annual volatility (6-15%) ──
+    pool_cv = float(np.std(pool_values) / pool_median) if pool_median > 0 else 0.1
+    sigma_lo = np.clip(pool_cv * 0.5, 0.05, 0.08)
+    sigma_hi = np.clip(pool_cv * 1.2, 0.10, 0.18)
+    if sigma_lo >= sigma_hi:
+        sigma_lo, sigma_hi = 0.06, 0.15
 
     return {
         "base_year": base_year,
@@ -1340,17 +1348,23 @@ def _estimate_hybrid_params(g3):
         "mu_range": (round(mu_lo, 4), round(mu_hi, 4)),
         "sigma_range": (round(sigma_lo, 4), round(sigma_hi, 4)),
         "limit_range": (round(limit_lo, 1), round(limit_hi, 1)),
-        "comp_values": comp_values,  # full set (untrimmed) for scatter plot
+        "comp_values": comp_values,       # ALL competitors for scatter plot
+        "pool_values": pool_values,        # production-weighted for bootstrap
         "n_comp": len(competitors),
         "higher_better": higher_better,
     }
 
 
 def _hybrid_mc_simulate(g3, n_sim=5000):
-    """Run hybrid GBM + S-curve MC simulation using graph3 data."""
+    """Run hybrid GBM + S-curve MC simulation using graph3 data.
+
+    Bootstraps starting values from PRODUCTION competitors (not lab/target
+    outliers), matching the behaviour of the hand-tuned standalone scripts.
+    """
     hp = _estimate_hybrid_params(g3)
-    comp_values = hp["comp_values"]
-    n_comp = hp["n_comp"]
+    pool_values = hp["pool_values"]       # production-weighted starting pool
+    comp_values = hp["comp_values"]       # all competitors (for floor clamp)
+    n_pool = len(pool_values)
     higher_better = hp["higher_better"]
 
     years = np.arange(hp["base_year"], hp["target_year"] + 1)
@@ -1361,8 +1375,9 @@ def _hybrid_mc_simulate(g3, n_sim=5000):
     all_paths = np.zeros((n_sim, n_years))
 
     for s in range(n_sim):
-        indices = rng.integers(0, n_comp, size=n_comp)
-        pool = comp_values[indices]
+        # Bootstrap from production pool (not all competitors)
+        indices = rng.integers(0, n_pool, size=n_pool)
+        pool = pool_values[indices]
 
         mu_max = rng.uniform(hp["mu_range"][0], hp["mu_range"][1])
         sigma = rng.uniform(hp["sigma_range"][0], hp["sigma_range"][1])
@@ -1385,7 +1400,7 @@ def _hybrid_mc_simulate(g3, n_sim=5000):
             )
 
             if higher_better:
-                new_val = min(max(new_val, float(np.min(comp_values)) * 0.3), L)
+                new_val = min(max(new_val, float(np.min(pool_values)) * 0.3), L)
             else:
                 new_val = max(new_val, L)
 
