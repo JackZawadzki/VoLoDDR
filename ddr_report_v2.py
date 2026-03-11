@@ -798,20 +798,27 @@ def generate_report_pdf(analysis: dict, graph_data: dict, figs: list,
                     ))
 
                     story.append(_p(
-                        "This projection uses a hybrid model that combines "
-                        "Geometric Brownian Motion (stochastic compounding) "
-                        "with S-curve saturation (physical limits). Unlike "
-                        "standard GBM \u2014 which assumes constant improvement "
-                        "rates indefinitely \u2014 or pure S-curves \u2014 where the "
-                        "trajectory is predetermined \u2014 the hybrid applies a "
+                        "This projection uses a hybrid stochastic model that "
+                        "combines Geometric Brownian Motion with S-curve "
+                        "saturation dynamics. Standard GBM assumes constant "
+                        "improvement rates indefinitely, which is unrealistic "
+                        "for physical technologies. Pure S-curves produce "
+                        "predetermined trajectories with no uncertainty. Our "
+                        "hybrid resolves both limitations by introducing a "
                         "state-dependent drift that naturally decays as values "
-                        f"approach the theoretical {ll}. Each of the 5,000 "
-                        "simulations independently bootstraps the competitor "
-                        "pool with replacement, draws unique parameter values "
-                        f"from uncertainty distributions (mu_max, sigma, {ll} "
-                        "L), and evolves its own stochastic path. The result "
-                        "is genuinely random, path-dependent trajectories "
-                        "that respect physical bounds.",
+                        f"approach the theoretical {ll} \u2014 capturing how real "
+                        "technologies compound rapidly in early stages but "
+                        "slow as they encounter fundamental physical bounds. "
+                        "The simulation is stage-aware: production-validated "
+                        "competitor values anchor the starting distribution, "
+                        "while prototype and target claims inform the "
+                        f"theoretical {ll}. Each of the 5,000 simulations "
+                        "independently bootstraps the competitor pool, draws "
+                        "unique parameters from calibrated uncertainty "
+                        f"distributions (drift rate, volatility, and {ll}), "
+                        "and evolves its own stochastic path \u2014 producing "
+                        "genuinely random, path-dependent trajectories that "
+                        "respect physical constraints.",
                         S["body_small"],
                     ))
 
@@ -857,11 +864,16 @@ def generate_report_pdf(analysis: dict, graph_data: dict, figs: list,
                         "technologies approach fundamental physical bounds. "
                         "The P10/P50/P90 bands represent the 10th, 50th, and "
                         "90th percentiles across all simulations, capturing "
-                        "both parameter uncertainty (each run has different "
-                        "mu, sigma, and L) and stochastic noise (each path "
-                        "follows its own random walk). This provides a "
-                        "realistic envelope of plausible outcomes for the "
-                        "competitive landscape.",
+                        "both parameter uncertainty (each run draws different "
+                        "drift, volatility, and limit values) and stochastic "
+                        "noise (each path follows its own random walk). This "
+                        "provides a probabilistic envelope of plausible "
+                        "outcomes grounded in the current competitive "
+                        "landscape. Note: projection quality improves with "
+                        "the breadth and accuracy of the competitor dataset. "
+                        "As additional proprietary data sources are "
+                        "integrated, these confidence bands will narrow and "
+                        "better reflect true market dynamics.",
                         S["body_small"],
                     ))
 
