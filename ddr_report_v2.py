@@ -1265,41 +1265,74 @@ def _chart_tech_strip(data: dict) -> plt.Figure:
 # ── Chart 5: Hybrid GBM + S-Curve Monte Carlo ───────────────────────────
 
 def _estimate_hybrid_params(g3):
-    """Estimate hybrid MC simulation parameters from graph3 competitor data."""
+    """Estimate hybrid MC simulation parameters from graph3 competitor data.
+
+    Uses robust statistics (IQR-based) to avoid extreme outliers from lab
+    results skewing the simulation.  Clamps all parameters to physically
+    reasonable ranges so the chart always looks sensible.
+    """
     competitors = g3.get("competitor_claims", [])
     comp_values = np.array([c["value"] for c in competitors], dtype=float)
+    company_claim = float(g3.get("company_claim", np.median(comp_values)))
     higher_better = g3.get("higher_is_better", True)
 
     base_year = datetime.now().year
     target_year = g3.get("target_year", base_year + 3)
     if target_year <= base_year:
         target_year = base_year + 3
-    horizon = target_year - base_year
+    # Enforce minimum 2-year horizon so rates don't blow up
+    horizon = max(target_year - base_year, 2)
+    target_year = base_year + horizon
 
-    median_val = float(np.median(comp_values))
-    std_val = float(np.std(comp_values))
+    # ── Robust central tendency (IQR-trimmed) ──
+    q25, q50, q75 = np.percentile(comp_values, [25, 50, 75])
+    iqr = q75 - q25
+    if higher_better:
+        # Trim extreme highs (lab results) — keep up to Q75 + 1.5*IQR
+        upper_fence = q75 + 1.5 * iqr if iqr > 0 else q75 * 1.5
+        trimmed = comp_values[comp_values <= upper_fence]
+        if len(trimmed) < 3:
+            trimmed = comp_values  # not enough after trim, use all
+        best = float(np.max(trimmed))
+        # Also consider the company claim as an anchor for the ceiling
+        anchor = max(best, company_claim)
+    else:
+        lower_fence = q25 - 1.5 * iqr if iqr > 0 else q25 * 0.5
+        trimmed = comp_values[comp_values >= lower_fence]
+        if len(trimmed) < 3:
+            trimmed = comp_values
+        best = float(np.min(trimmed))
+        anchor = min(best, company_claim)
+
+    median_val = float(np.median(trimmed))
+    std_val = float(np.std(trimmed))
     cv = std_val / median_val if median_val > 0 else 0.1
 
-    # Sigma: based on coefficient of variation of competitor spread
-    sigma_lo = max(cv * 0.4, 0.05)
-    sigma_hi = max(cv * 1.2, 0.20)
+    # ── Sigma: clamped to [0.04, 0.20] — realistic annual volatility ──
+    sigma_lo = np.clip(cv * 0.4, 0.04, 0.12)
+    sigma_hi = np.clip(cv * 1.0, 0.08, 0.20)
+    if sigma_lo >= sigma_hi:
+        sigma_lo, sigma_hi = 0.05, 0.15
 
+    # ── Mu: clamped to reasonable annual improvement rates ──
     if higher_better:
-        best = float(np.max(comp_values))
         ratio = best / median_val if median_val > 0 else 1.1
         annual_rate = max(ratio ** (1.0 / horizon) - 1, 0.01)
-        mu_lo = max(annual_rate * 0.3, 0.02)
-        mu_hi = max(annual_rate * 2.0, 0.15)
-        limit_lo = best * 1.3
-        limit_hi = best * 2.0
+        mu_lo = np.clip(annual_rate * 0.3, 0.02, 0.08)
+        mu_hi = np.clip(annual_rate * 1.5, 0.05, 0.20)
+        # Ceiling: modest multiple of the anchor (best trimmed or company claim)
+        limit_lo = anchor * 1.15
+        limit_hi = anchor * 1.6
     else:
-        best = float(np.min(comp_values))
         ratio = best / median_val if median_val > 0 else 0.9
         annual_rate = min(ratio ** (1.0 / horizon) - 1, -0.01)
-        mu_lo = min(annual_rate * 2.0, -0.15)
-        mu_hi = min(annual_rate * 0.3, -0.02)
-        limit_lo = max(best * 0.2, 1.0)
-        limit_hi = best * 0.7
+        mu_lo = np.clip(annual_rate * 1.5, -0.20, -0.05)
+        mu_hi = np.clip(annual_rate * 0.3, -0.08, -0.02)
+        limit_lo = max(anchor * 0.4, 1.0)
+        limit_hi = anchor * 0.85
+
+    if mu_lo >= mu_hi:
+        mu_lo, mu_hi = (0.02, 0.12) if higher_better else (-0.12, -0.02)
 
     return {
         "base_year": base_year,
@@ -1307,7 +1340,7 @@ def _estimate_hybrid_params(g3):
         "mu_range": (round(mu_lo, 4), round(mu_hi, 4)),
         "sigma_range": (round(sigma_lo, 4), round(sigma_hi, 4)),
         "limit_range": (round(limit_lo, 1), round(limit_hi, 1)),
-        "comp_values": comp_values,
+        "comp_values": comp_values,  # full set (untrimmed) for scatter plot
         "n_comp": len(competitors),
         "higher_better": higher_better,
     }
@@ -1466,9 +1499,17 @@ def _chart_hybrid_mc(data: dict) -> plt.Figure:
                       edgecolor=clr, alpha=0.85, linewidth=0.6),
         )
 
-    # Competitors at base year
+    # Competitors at base year — with anti-overlap label placement
     plotted_stages = set()
-    for c in competitors:
+    sorted_comps = sorted(competitors, key=lambda c: c["value"],
+                          reverse=higher_better)
+    # Calculate y-range for minimum label spacing
+    all_vals = [c["value"] for c in competitors] + [company_val]
+    y_span = max(all_vals) - min(all_vals) if len(all_vals) > 1 else 100
+    min_gap = y_span * 0.04  # minimum 4% of y-range between labels
+    used_positions = []
+
+    for c in sorted_comps:
         st = c.get("stage", "target")
         style = _STAGE_STYLE.get(st, _STAGE_STYLE["target"])
         ax.scatter(
@@ -1478,10 +1519,17 @@ def _chart_hybrid_mc(data: dict) -> plt.Figure:
             label=style["label"] if st not in plotted_stages else None,
         )
         plotted_stages.add(st)
+        # Nudge label if it would overlap a previous one
+        label_y = c["value"]
+        for prev_y in used_positions:
+            if abs(label_y - prev_y) < min_gap:
+                label_y = prev_y + (min_gap if label_y >= prev_y else -min_gap)
+        used_positions.append(label_y)
+        y_offset_pts = (label_y - c["value"]) / y_span * 300  # approx pts
         ax.annotate(
             _mpl_safe(c["name"]), (hp["base_year"], c["value"]),
-            textcoords="offset points", xytext=(-8, 0),
-            fontsize=6, color=TEXT_MID, ha="right", va="center", alpha=0.7,
+            textcoords="offset points", xytext=(-8, y_offset_pts),
+            fontsize=5.5, color=TEXT_MID, ha="right", va="center", alpha=0.7,
         )
 
     # Company target star
