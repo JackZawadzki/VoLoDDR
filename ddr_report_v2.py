@@ -798,27 +798,18 @@ def generate_report_pdf(analysis: dict, graph_data: dict, figs: list,
                     ))
 
                     story.append(_p(
-                        "This projection uses a hybrid stochastic model that "
-                        "combines Geometric Brownian Motion with S-curve "
-                        "saturation dynamics. Standard GBM assumes constant "
-                        "improvement rates indefinitely, which is unrealistic "
-                        "for physical technologies. Pure S-curves produce "
-                        "predetermined trajectories with no uncertainty. Our "
-                        "hybrid resolves both limitations by introducing a "
-                        "state-dependent drift that naturally decays as values "
-                        f"approach the theoretical {ll} \u2014 capturing how real "
-                        "technologies compound rapidly in early stages but "
-                        "slow as they encounter fundamental physical bounds. "
+                        "This projection uses a hybrid stochastic model "
+                        "combining Geometric Brownian Motion with S-curve "
+                        "saturation dynamics. A state-dependent drift "
+                        f"decays as values approach the theoretical {ll}, "
+                        "capturing how real technologies compound rapidly "
+                        "early on but slow near fundamental physical bounds. "
                         "The simulation is stage-aware: production-validated "
-                        "competitor values anchor the starting distribution, "
-                        "while prototype and target claims inform the "
-                        f"theoretical {ll}. Each of the 5,000 simulations "
-                        "independently bootstraps the competitor pool, draws "
-                        "unique parameters from calibrated uncertainty "
-                        f"distributions (drift rate, volatility, and {ll}), "
-                        "and evolves its own stochastic path \u2014 producing "
-                        "genuinely random, path-dependent trajectories that "
-                        "respect physical constraints.",
+                        "values anchor the starting distribution while "
+                        f"prototype claims inform the {ll}. 5,000 runs each "
+                        "bootstrap the competitor pool and draw unique "
+                        "parameters, producing path-dependent trajectories "
+                        "that respect physical constraints.",
                         S["body_small"],
                     ))
 
@@ -858,22 +849,13 @@ def generate_report_pdf(analysis: dict, graph_data: dict, figs: list,
                     story.append(Spacer(1, 0.1 * inch))
 
                     story.append(_p(
-                        f"Far from the {ll}, the full drift applies and "
-                        f"compounding is rapid. Near the {ll}, drift vanishes "
-                        "and the value saturates \u2014 mirroring how real "
-                        "technologies approach fundamental physical bounds. "
-                        "The P10/P50/P90 bands represent the 10th, 50th, and "
-                        "90th percentiles across all simulations, capturing "
-                        "both parameter uncertainty (each run draws different "
-                        "drift, volatility, and limit values) and stochastic "
-                        "noise (each path follows its own random walk). This "
-                        "provides a probabilistic envelope of plausible "
-                        "outcomes grounded in the current competitive "
-                        "landscape. Note: projection quality improves with "
-                        "the breadth and accuracy of the competitor dataset. "
-                        "As additional proprietary data sources are "
-                        "integrated, these confidence bands will narrow and "
-                        "better reflect true market dynamics.",
+                        "P10/P50/P90 bands capture both parameter uncertainty "
+                        "and stochastic noise across all simulations, "
+                        "providing a probabilistic envelope grounded in the "
+                        "current competitive landscape. Projection quality "
+                        "improves with dataset breadth \u2014 as additional "
+                        "proprietary data sources are integrated, confidence "
+                        "bands will narrow further.",
                         S["body_small"],
                     ))
 
