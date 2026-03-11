@@ -373,23 +373,6 @@ Return comprehensive JSON:
     "graph_data": {{
         "company_name": "Same as top-level company_name",
         "sector": "Same as top-level industry",
-        "graph1": {{
-            "years": [2024, 2025, 2026, 2027, 2028, 2029, 2030],
-            "company_revenue_usd_m": [0, 0, 5, 20, 60, 150, 350],
-            "peers": [
-                {{
-                    "name": "Real Peer Co A (public or well-known)",
-                    "years": [2024, 2025, 2026, 2027, 2028, 2029, 2030],
-                    "revenue_usd_m": [500, 600, 720, 850, 1000, 1150, 1300]
-                }},
-                {{
-                    "name": "Real Peer Co B",
-                    "years": [2024, 2025, 2026, 2027, 2028, 2029, 2030],
-                    "revenue_usd_m": [200, 240, 290, 340, 400, 460, 530]
-                }}
-            ],
-            "note": "Peer revenues sourced from [actual sources]"
-        }},
         "graph2": {{
             "years": [2020, 2021, 2022, 2023, 2024, 2025, 2026, 2027, 2028, 2029, 2030],
             "tam_usd_b": [10, 12, 14, 17, 20, 24, 29, 35, 42, 50, 60],
@@ -434,7 +417,7 @@ WEB RESEARCH REQUIREMENTS:
 You have access to web_search — use it to verify and enrich your analysis.
 Do 8-12 searches covering:
   - Company name + "funding" / "crunchbase" / "news"
-  - Competitor names + "revenue" / "valuation" / "market share"
+  - Competitor names + "valuation" / "market share"
   - "[sector] market size TAM 2024 2025" (BloombergNEF, IEA, Grand View Research)
   - "[sector] CAGR forecast 2030"
   - Technology performance benchmarks relevant to company claims
@@ -444,11 +427,11 @@ Do 8-12 searches covering:
 Do NOT guess at numbers — search for real data first. Cite what you find.
 
 GRAPH DATA REQUIREMENTS:
-- graph1: Company's own revenue projections from the deck. For peers, use WEB SEARCH for 2-3 real competitors with actual revenue figures.
 - graph2: TAM/SAM from real market research via WEB SEARCH (IEA, BloombergNEF, Grand View, etc.).
-- graph3: Technology benchmark — identify the ONE key quantifiable metric for the company's core tech.
+- graph3: Technology benchmark — this is CRITICAL. Identify the ONE key quantifiable metric for the company's core tech.
   Search for 5-10 competitor data points with named sources. Classify each as "production", "target", or "prototype".
   Include current best-in-class baseline. Do NOT guess — only include competitors with sourced values.
+  This data powers a Hybrid GBM + S-Curve Monte Carlo simulation, so accuracy and breadth matter.
 
 IMPORTANT:
 - ONLY include CRITICAL and HIGH priority unverified claims. Skip MEDIUM and LOW entirely.

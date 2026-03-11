@@ -220,10 +220,8 @@ def generate_report_pdf(analysis: dict, graph_data: dict, figs: list,
         ("outcome", "Outcome Magnitude"),
         ("conclusion", "Conclusion"),
         ("sources", "Sources"),
-        ("chart1", "Revenue Trajectory vs. Peers"),
-        ("chart2", "Market Size \u2014 TAM & SAM"),
-        ("chart3", "Technology Benchmark \u2014 Table"),
-        ("chart4", "Technology Benchmark \u2014 Strip Chart"),
+        ("chart_tam", "Market Size \u2014 TAM & SAM"),
+        ("chart_mc", "Hybrid Monte Carlo Projection"),
     ]
 
     class _Anchor(Flowable):
@@ -432,10 +430,17 @@ def generate_report_pdf(analysis: dict, graph_data: dict, figs: list,
             story.append(Spacer(1, 0.06 * inch))
             story.append(_p("Market Leaders &amp; Incumbents", S["subheading"]))
             for ldr in leaders:
+                ldr_pos = ldr.get('market_position', '')
+                ldr_val = ldr.get('valuation_or_revenue', '')
+                ldr_meta = ""
+                if ldr_pos and ldr_val:
+                    ldr_meta = f" — {ldr_pos} ({ldr_val})"
+                elif ldr_pos:
+                    ldr_meta = f" — {ldr_pos}"
+                elif ldr_val:
+                    ldr_meta = f" ({ldr_val})"
                 story.append(_p(
-                    f"<b>{ldr.get('name', 'Unknown')}</b> — "
-                    f"{ldr.get('market_position', '')} "
-                    f"({ldr.get('valuation_or_revenue', '')}): "
+                    f"<b>{ldr.get('name', 'Unknown')}</b>{ldr_meta}: "
                     f"{ldr.get('description', '')}"
                     + (f" <i>[{', '.join(ldr['sources'][:2])}]</i>" if ldr.get('sources') else ""),
                     S["body_small"],
@@ -722,12 +727,10 @@ def generate_report_pdf(analysis: dict, graph_data: dict, figs: list,
 
         # ── CHART PAGES — one chart per page, full size ──────────────
         chart_titles = [
-            "Revenue Trajectory vs. Peers",
             "Market Size \u2014 TAM & SAM",
-            "Technology Benchmark \u2014 Competitor Table",
-            "Technology Benchmark \u2014 Strip Chart",
+            "Hybrid Monte Carlo Projection",
         ]
-        chart_keys = ["chart1", "chart2", "chart3", "chart4"]
+        chart_keys = ["chart_tam", "chart_mc"]
         for i in range(len(chart_renders)):
             story.append(PageBreak())
             story.append(_Anchor(chart_keys[i]))
@@ -736,36 +739,131 @@ def generate_report_pdf(analysis: dict, graph_data: dict, figs: list,
                 story.append(Spacer(1, 0.1 * inch))
             story.append(_chart_img(i))
 
-            # After strip chart (chart 4): add caption + methodology
-            if i == 3:
-                caption_style = ParagraphStyle(
-                    'ChartCaption', parent=S["body_small"],
-                    fontSize=8, leading=10, spaceAfter=4, spaceBefore=8,
-                    textColor=colors.HexColor('#4a4a4a'), alignment=TA_CENTER,
-                )
-                method_style = ParagraphStyle(
-                    'ChartMethod', parent=S["body_small"],
-                    fontSize=7.5, leading=10, spaceAfter=2, spaceBefore=2,
-                    textColor=colors.HexColor('#888888'), alignment=TA_CENTER,
-                )
-                story.append(_p(
-                    "<i>P10/P50/P90 percentiles are calculated directly from the "
-                    "raw competitor values collected above. No smoothing or simulation "
-                    "is applied.</i>",
-                    caption_style,
-                ))
-                story.append(_p(
-                    "<b>Methodology:</b> The AI identified the single most important "
-                    "quantifiable performance metric from the pitch deck, then performed "
-                    "targeted web searches to find real, sourced competitor values for "
-                    "the same metric. Each data point is classified by maturity stage "
-                    "(production, prototype, or target). P10 = 10th percentile (only 10% "
-                    "of competitors perform worse), P50 = median (middle value), P90 = "
-                    "90th percentile (only 10% of competitors perform better). These are "
-                    "computed using standard percentile interpolation across all collected "
-                    "competitor data points.",
-                    method_style,
-                ))
+            # After hybrid MC chart: add competitor table + methodology
+            if i == 1:
+                g3 = graph_data.get("graph3", {})
+                if g3 and g3.get("competitor_claims"):
+                    hp = _estimate_hybrid_params(g3)
+                    competitors_list = g3.get("competitor_claims", [])
+                    metric_unit_g3 = g3.get("metric_unit", "")
+                    hb = g3.get("higher_is_better", True)
+                    ll = "ceiling" if hb else "floor"
+
+                    # ── Compact competitor table ──
+                    story.append(Spacer(1, 0.15 * inch))
+                    comp_header = [[
+                        _p("<b>Competitor</b>", S["body_small"]),
+                        _p(f"<b>{_esc(metric_unit_g3)}</b>", S["body_small"]),
+                        _p("<b>Stage</b>", S["body_small"]),
+                    ]]
+                    comp_rows = [
+                        [c["name"], f"{c['value']:.4g}",
+                         c.get("stage", "target").title()]
+                        for c in competitors_list
+                    ]
+                    comp_rows.append([
+                        f"{g3.get('company_name', 'Company')} (target)",
+                        f"{g3['company_claim']:.4g}",
+                        "Target",
+                    ])
+                    comp_tbl = Table(
+                        comp_header + comp_rows,
+                        colWidths=[3.0 * inch, 1.2 * inch, 1.0 * inch],
+                    )
+                    comp_tbl.setStyle(TableStyle([
+                        ("BACKGROUND", (0, 0), (-1, 0),
+                         colors.HexColor(VOLO_GREEN)),
+                        ("TEXTCOLOR", (0, 0), (-1, 0), colors.white),
+                        ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
+                        ("FONTSIZE", (0, 0), (-1, -1), 8),
+                        ("FONTNAME", (0, 1), (-1, -1), "Helvetica"),
+                        ("ROWBACKGROUNDS", (0, 1), (-1, -2),
+                         [colors.white, colors.HexColor(VOLO_PALE)]),
+                        ("BACKGROUND", (0, -1), (-1, -1),
+                         colors.HexColor("#e8f5e9")),
+                        ("FONTNAME", (0, -1), (-1, -1), "Helvetica-Bold"),
+                        ("GRID", (0, 0), (-1, -1), 0.3,
+                         colors.HexColor(GRID_COLOR)),
+                        ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+                        ("TOPPADDING", (0, 0), (-1, -1), 3),
+                        ("BOTTOMPADDING", (0, 0), (-1, -1), 3),
+                    ]))
+                    story.append(comp_tbl)
+
+                    # ── Methodology (2 paragraphs + equation) ──
+                    story.append(Spacer(1, 0.2 * inch))
+                    story.append(_p(
+                        "Methodology \u2014 Hybrid GBM + S-Curve Monte Carlo",
+                        S["subheading"],
+                    ))
+
+                    story.append(_p(
+                        "This projection uses a hybrid model that combines "
+                        "Geometric Brownian Motion (stochastic compounding) "
+                        "with S-curve saturation (physical limits). Unlike "
+                        "standard GBM \u2014 which assumes constant improvement "
+                        "rates indefinitely \u2014 or pure S-curves \u2014 where the "
+                        "trajectory is predetermined \u2014 the hybrid applies a "
+                        "state-dependent drift that naturally decays as values "
+                        f"approach the theoretical {ll}. Each of the 5,000 "
+                        "simulations independently bootstraps the competitor "
+                        "pool with replacement, draws unique parameter values "
+                        f"from uncertainty distributions (mu_max, sigma, {ll} "
+                        "L), and evolves its own stochastic path. The result "
+                        "is genuinely random, path-dependent trajectories "
+                        "that respect physical bounds.",
+                        S["body_small"],
+                    ))
+
+                    # Equation box
+                    if hb:
+                        rem_eq = "remaining = (L - X(t)) / (L - X(0))"
+                    else:
+                        rem_eq = "remaining = (X(t) - L) / (X(0) - L)"
+
+                    formula_style = ParagraphStyle(
+                        'HybridFormula', parent=S["body_small"],
+                        fontName="Courier", fontSize=8, leading=12,
+                        textColor=colors.HexColor(TEXT_MID),
+                    )
+                    formula_box = Table(
+                        [[_p(
+                            f"{rem_eq} &nbsp;&nbsp;|&nbsp;&nbsp; "
+                            "mu(t) = mu_max * remaining "
+                            "&nbsp;&nbsp;|&nbsp;&nbsp; "
+                            "X(t+1) = X(t) * exp((mu(t) - "
+                            "sigma^2/2)dt + sigma*sqrt(dt)*Z)",
+                            formula_style,
+                        )]],
+                        colWidths=[6.5 * inch],
+                    )
+                    formula_box.setStyle(TableStyle([
+                        ("BACKGROUND", (0, 0), (-1, -1),
+                         colors.HexColor("#f5f8f5")),
+                        ("BOX", (0, 0), (-1, -1), 0.5,
+                         colors.HexColor(GRID_COLOR)),
+                        ("TOPPADDING", (0, 0), (-1, -1), 6),
+                        ("BOTTOMPADDING", (0, 0), (-1, -1), 6),
+                        ("LEFTPADDING", (0, 0), (-1, -1), 10),
+                    ]))
+                    story.append(Spacer(1, 0.08 * inch))
+                    story.append(formula_box)
+                    story.append(Spacer(1, 0.1 * inch))
+
+                    story.append(_p(
+                        f"Far from the {ll}, the full drift applies and "
+                        f"compounding is rapid. Near the {ll}, drift vanishes "
+                        "and the value saturates \u2014 mirroring how real "
+                        "technologies approach fundamental physical bounds. "
+                        "The P10/P50/P90 bands represent the 10th, 50th, and "
+                        "90th percentiles across all simulations, capturing "
+                        "both parameter uncertainty (each run has different "
+                        "mu, sigma, and L) and stochastic noise (each path "
+                        "follows its own random walk). This provides a "
+                        "realistic envelope of plausible outcomes for the "
+                        "competitive landscape.",
+                        S["body_small"],
+                    ))
 
         return story
 
@@ -1157,6 +1255,321 @@ def _chart_tech_strip(data: dict) -> plt.Figure:
     return fig
 
 
+# ── Chart 5: Hybrid GBM + S-Curve Monte Carlo ───────────────────────────
+
+def _estimate_hybrid_params(g3):
+    """Estimate hybrid MC simulation parameters from graph3 competitor data."""
+    competitors = g3.get("competitor_claims", [])
+    comp_values = np.array([c["value"] for c in competitors], dtype=float)
+    higher_better = g3.get("higher_is_better", True)
+
+    base_year = datetime.now().year
+    target_year = g3.get("target_year", base_year + 3)
+    if target_year <= base_year:
+        target_year = base_year + 3
+    horizon = target_year - base_year
+
+    median_val = float(np.median(comp_values))
+    std_val = float(np.std(comp_values))
+    cv = std_val / median_val if median_val > 0 else 0.1
+
+    # Sigma: based on coefficient of variation of competitor spread
+    sigma_lo = max(cv * 0.4, 0.05)
+    sigma_hi = max(cv * 1.2, 0.20)
+
+    if higher_better:
+        best = float(np.max(comp_values))
+        ratio = best / median_val if median_val > 0 else 1.1
+        annual_rate = max(ratio ** (1.0 / horizon) - 1, 0.01)
+        mu_lo = max(annual_rate * 0.3, 0.02)
+        mu_hi = max(annual_rate * 2.0, 0.15)
+        limit_lo = best * 1.3
+        limit_hi = best * 2.0
+    else:
+        best = float(np.min(comp_values))
+        ratio = best / median_val if median_val > 0 else 0.9
+        annual_rate = min(ratio ** (1.0 / horizon) - 1, -0.01)
+        mu_lo = min(annual_rate * 2.0, -0.15)
+        mu_hi = min(annual_rate * 0.3, -0.02)
+        limit_lo = max(best * 0.2, 1.0)
+        limit_hi = best * 0.7
+
+    return {
+        "base_year": base_year,
+        "target_year": target_year,
+        "mu_range": (round(mu_lo, 4), round(mu_hi, 4)),
+        "sigma_range": (round(sigma_lo, 4), round(sigma_hi, 4)),
+        "limit_range": (round(limit_lo, 1), round(limit_hi, 1)),
+        "comp_values": comp_values,
+        "n_comp": len(competitors),
+        "higher_better": higher_better,
+    }
+
+
+def _hybrid_mc_simulate(g3, n_sim=5000):
+    """Run hybrid GBM + S-curve MC simulation using graph3 data."""
+    hp = _estimate_hybrid_params(g3)
+    comp_values = hp["comp_values"]
+    n_comp = hp["n_comp"]
+    higher_better = hp["higher_better"]
+
+    years = np.arange(hp["base_year"], hp["target_year"] + 1)
+    n_years = len(years)
+    dt = 1.0
+    rng = np.random.default_rng(42)
+
+    all_paths = np.zeros((n_sim, n_years))
+
+    for s in range(n_sim):
+        indices = rng.integers(0, n_comp, size=n_comp)
+        pool = comp_values[indices]
+
+        mu_max = rng.uniform(hp["mu_range"][0], hp["mu_range"][1])
+        sigma = rng.uniform(hp["sigma_range"][0], hp["sigma_range"][1])
+        L = rng.uniform(hp["limit_range"][0], hp["limit_range"][1])
+
+        start = float(rng.choice(pool))
+        path = [start]
+
+        for t in range(1, n_years):
+            current = path[-1]
+            if higher_better:
+                remaining = max((L - current) / (L - start), 0.0) if L > start else 0.0
+            else:
+                remaining = max((current - L) / (start - L), 0.0) if start > L else 0.0
+
+            mu_t = mu_max * remaining
+            z = rng.normal()
+            new_val = current * np.exp(
+                (mu_t - 0.5 * sigma**2) * dt + sigma * np.sqrt(dt) * z
+            )
+
+            if higher_better:
+                new_val = min(max(new_val, float(np.min(comp_values)) * 0.3), L)
+            else:
+                new_val = max(new_val, L)
+
+            path.append(new_val)
+
+        all_paths[s] = path
+
+    p10 = np.percentile(all_paths, 10, axis=0)
+    p50 = np.percentile(all_paths, 50, axis=0)
+    p90 = np.percentile(all_paths, 90, axis=0)
+
+    return years, all_paths, p10, p50, p90, hp
+
+
+def _chart_hybrid_mc(data: dict) -> plt.Figure:
+    """Create hybrid GBM + S-curve Monte Carlo chart from graph3 data."""
+    g3 = data["graph3"]
+    company = data.get("company_name", g3.get("company_name", "Company"))
+    higher_better = g3.get("higher_is_better", True)
+    competitors = g3["competitor_claims"]
+    company_val = g3["company_claim"]
+    metric_unit = g3["metric_unit"]
+    metric_name = g3["metric_name"]
+    target_year = g3.get("target_year", datetime.now().year + 3)
+
+    n_sim = 5000
+    n_show = 80
+
+    years, all_paths, p10, p50, p90, hp = _hybrid_mc_simulate(g3, n_sim=n_sim)
+
+    # Color assignments
+    if higher_better:
+        OPT_COLOR = VOLO_GREEN
+        PESS_COLOR = ACCENT_ORANGE
+    else:
+        OPT_COLOR = VOLO_GREEN
+        PESS_COLOR = ACCENT_ORANGE
+    MED_COLOR = TEXT_DARK
+    SIM_COLOR = "#c8dcc8"
+
+    fig, ax = plt.subplots(figsize=(10, 6.5))
+    fig.patch.set_facecolor("white")
+    ax.set_facecolor(VOLO_PALE)
+
+    ax.set_title(
+        f"{company} \u2014 Hybrid GBM + S-Curve Monte Carlo",
+        fontsize=14, fontweight="bold", color=TEXT_DARK, pad=20,
+    )
+
+    limit_label = "ceiling" if higher_better else "floor"
+    ax.text(
+        0, 1.02,
+        f"mu_max ~ U({hp['mu_range'][0]:.0%}, {hp['mu_range'][1]:.0%})  |  "
+        f"sigma ~ U({hp['sigma_range'][0]:.0%}, {hp['sigma_range'][1]:.0%})  |  "
+        f"{limit_label} ~ U({hp['limit_range'][0]:.0f}, {hp['limit_range'][1]:.0f}) "
+        f"{metric_unit}  |  bootstrapped",
+        transform=ax.transAxes, fontsize=8, color=TEXT_MID, va="bottom",
+    )
+
+    ax.set_xlabel("Year", fontsize=10, color=TEXT_MID, labelpad=8)
+    ax.set_ylabel(
+        f"{metric_name} ({metric_unit})", fontsize=10, color=TEXT_MID, labelpad=8,
+    )
+    ax.spines["top"].set_visible(False)
+    ax.spines["right"].set_visible(False)
+    ax.spines["left"].set_color(GRID_COLOR)
+    ax.spines["bottom"].set_color(GRID_COLOR)
+    ax.yaxis.grid(True, color=GRID_COLOR, linewidth=0.8, linestyle="--")
+    ax.xaxis.grid(True, color=GRID_COLOR, linewidth=0.3, linestyle="--", alpha=0.3)
+    ax.set_axisbelow(True)
+
+    # Sim paths
+    show_idx = np.random.choice(n_sim, min(n_show, n_sim), replace=False)
+    for idx in show_idx:
+        ax.plot(years, all_paths[idx], color=SIM_COLOR, linewidth=0.3,
+                alpha=0.2, zorder=1)
+
+    # Bands + percentile lines
+    if higher_better:
+        ax.fill_between(years, p50, p90, color=VOLO_GREEN, alpha=0.08, zorder=3)
+        ax.fill_between(years, p10, p50, color=ACCENT_ORANGE, alpha=0.08, zorder=3)
+        ax.plot(years, p90, color=OPT_COLOR, linewidth=1.4, linestyle="--",
+                label="P90 (optimistic)", zorder=5)
+        ax.plot(years, p10, color=PESS_COLOR, linewidth=1.4, linestyle="--",
+                label="P10 (pessimistic)", zorder=5)
+    else:
+        ax.fill_between(years, p90, p50, color=ACCENT_ORANGE, alpha=0.08, zorder=3)
+        ax.fill_between(years, p50, p10, color=VOLO_GREEN, alpha=0.08, zorder=3)
+        ax.plot(years, p10, color=OPT_COLOR, linewidth=1.4, linestyle="--",
+                label="P10 (optimistic)", zorder=5)
+        ax.plot(years, p90, color=PESS_COLOR, linewidth=1.4, linestyle="--",
+                label="P90 (pessimistic)", zorder=5)
+    ax.plot(years, p50, color=MED_COLOR, linewidth=2.2,
+            label="P50 (median)", zorder=6)
+
+    # End labels
+    for val, clr, lbl in [
+        (p90[-1], OPT_COLOR if higher_better else PESS_COLOR, "P90"),
+        (p50[-1], MED_COLOR, "P50"),
+        (p10[-1], PESS_COLOR if higher_better else OPT_COLOR, "P10"),
+    ]:
+        ax.annotate(
+            f"{lbl}: {val:.0f}", (years[-1], val),
+            textcoords="offset points", xytext=(8, 0),
+            fontsize=7.5, fontweight="bold", color=clr, va="center",
+            bbox=dict(boxstyle="round,pad=0.15", facecolor="white",
+                      edgecolor=clr, alpha=0.85, linewidth=0.6),
+        )
+
+    # Competitors at base year
+    plotted_stages = set()
+    for c in competitors:
+        st = c.get("stage", "target")
+        style = _STAGE_STYLE.get(st, _STAGE_STYLE["target"])
+        ax.scatter(
+            hp["base_year"], c["value"], marker=style["marker"],
+            color=style["color"], s=55, zorder=14, edgecolors="white",
+            linewidths=0.6, alpha=0.9,
+            label=style["label"] if st not in plotted_stages else None,
+        )
+        plotted_stages.add(st)
+        ax.annotate(
+            c["name"], (hp["base_year"], c["value"]),
+            textcoords="offset points", xytext=(-8, 0),
+            fontsize=6, color=TEXT_MID, ha="right", va="center", alpha=0.7,
+        )
+
+    # Company target star
+    ax.plot(target_year, company_val, marker="*", color=VOLO_GREEN,
+            markersize=22, zorder=20, markeredgecolor="white",
+            markeredgewidth=1.0)
+    ax.annotate(
+        f"{company} Target\n{company_val:.4g} {metric_unit}",
+        (target_year, company_val),
+        textcoords="offset points", xytext=(-60, -25),
+        fontsize=9, fontweight="bold", color=VOLO_GREEN,
+        ha="center", va="top",
+        bbox=dict(boxstyle="round,pad=0.4", facecolor="white",
+                  edgecolor=VOLO_GREEN, linewidth=1.5, alpha=0.95),
+        arrowprops=dict(arrowstyle="->", color=VOLO_GREEN,
+                        connectionstyle="arc3,rad=-0.2", linewidth=1.2),
+    )
+
+    # Limit range shading
+    L_mean = np.mean(hp["limit_range"])
+    ax.axhspan(hp["limit_range"][0], hp["limit_range"][1],
+               color="#aaaaaa", alpha=0.06, zorder=1)
+    ax.axhline(L_mean, color="#aaaaaa", linewidth=1.0, linestyle=":",
+               alpha=0.6, zorder=2)
+    y_offset = -8 if higher_better else 3
+    va_align = "top" if higher_better else "bottom"
+    ax.text(
+        target_year + 0.12, L_mean + y_offset,
+        f"Theoretical {limit_label} "
+        f"~{hp['limit_range'][0]:.0f}-{hp['limit_range'][1]:.0f} {metric_unit}",
+        fontsize=7, color="#999999", va=va_align, fontstyle="italic",
+    )
+
+    # Zone annotation
+    if higher_better:
+        if company_val > p90[-1]:
+            zone, zc = "Above P90 \u2014 Highly Ambitious", OPT_COLOR
+        elif company_val > p50[-1]:
+            zone, zc = "P50-P90 \u2014 Competitive", ACCENT_BLUE
+        elif company_val > p10[-1]:
+            zone, zc = "P10-P50 \u2014 Market Parity", PESS_COLOR
+        else:
+            zone, zc = "Below P10 \u2014 Below Market", ACCENT_ORANGE
+        zone_pos, zone_va = (0.02, 0.97), "top"
+    else:
+        if company_val < p10[-1]:
+            zone, zc = "Below P10 \u2014 Highly Ambitious", OPT_COLOR
+        elif company_val < p50[-1]:
+            zone, zc = "P10-P50 \u2014 Competitive", ACCENT_BLUE
+        elif company_val < p90[-1]:
+            zone, zc = "P50-P90 \u2014 Market Parity", PESS_COLOR
+        else:
+            zone, zc = "Above P90 \u2014 Below Market", ACCENT_ORANGE
+        zone_pos, zone_va = (0.02, 0.02), "bottom"
+
+    ax.text(
+        zone_pos[0], zone_pos[1], zone, transform=ax.transAxes,
+        fontsize=8, fontweight="bold", color=zc, va=zone_va, ha="left",
+        bbox=dict(boxstyle="round,pad=0.5", facecolor="white",
+                  edgecolor=zc, linewidth=1.2, alpha=0.92),
+    )
+
+    # Direction arrow
+    if higher_better:
+        ax.annotate("", xy=(0.98, 0.90), xytext=(0.98, 0.75),
+                    xycoords="axes fraction",
+                    arrowprops=dict(arrowstyle="->", color=VOLO_GREEN,
+                                    linewidth=1.5))
+        ax.text(0.98, 0.92, "Higher = Better", transform=ax.transAxes,
+                fontsize=6.5, color=VOLO_GREEN, ha="center", fontweight="bold")
+    else:
+        ax.annotate("", xy=(0.98, 0.15), xytext=(0.98, 0.30),
+                    xycoords="axes fraction",
+                    arrowprops=dict(arrowstyle="->", color=VOLO_GREEN,
+                                    linewidth=1.5))
+        ax.text(0.98, 0.13, "Lower = Better", transform=ax.transAxes,
+                fontsize=6.5, color=VOLO_GREEN, ha="center", fontweight="bold")
+
+    legend_loc = "lower right" if higher_better else "upper right"
+    ax.legend(fontsize=8, loc=legend_loc, framealpha=0.9,
+              edgecolor=GRID_COLOR, ncol=1, handletextpad=0.5, borderpad=0.8)
+
+    right_pad = 0.8 if higher_better else 1.0
+    ax.set_xlim(hp["base_year"] - 0.3, target_year + right_pad)
+    ax.set_xticks(years)
+
+    note = (
+        f"n = {n_sim:,} MC sims  |  Hybrid GBM + S-Curve: "
+        f"state-dependent drift decays toward {limit_label}  |  "
+        f"all params randomized per sim"
+    )
+    ax.text(0.5, -0.09, note, transform=ax.transAxes,
+            fontsize=6.5, color="#aaaaaa", ha="center")
+
+    fig.tight_layout(pad=1.5)
+    _add_ai_watermark(fig)
+    return fig
+
+
 # ── Blank fallback ───────────────────────────────────────────────────────────
 
 def _blank_figure(message: str) -> plt.Figure:
@@ -1175,16 +1588,16 @@ def _blank_figure(message: str) -> plt.Figure:
 
 def build_charts(graph_data: dict) -> list:
     """
-    Build four matplotlib figures from graph data dict.
+    Build matplotlib figures from graph data dict.
 
     Args:
-        graph_data: Dict with keys company_name, sector, graph1, graph2, graph3.
+        graph_data: Dict with keys company_name, sector, graph2, graph3.
 
     Returns:
-        [fig_revenue, fig_market, fig_tech_table, fig_tech_strip]
+        [fig_market, fig_hybrid_mc]
     """
     figs = []
-    for build_fn in (_chart_revenue, _chart_market, _chart_tech_table, _chart_tech_strip):
+    for build_fn in (_chart_market, _chart_hybrid_mc):
         try:
             figs.append(build_fn(graph_data))
         except Exception as e:
